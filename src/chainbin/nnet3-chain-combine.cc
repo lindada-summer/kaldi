@@ -44,11 +44,12 @@ int main(int argc, char *argv[]) {
     std::string use_gpu = "yes";
     NnetCombineConfig combine_config;
     chain::ChainTrainingOptions chain_config;
-
+    std::string priors_file = "";
     ParseOptions po(usage);
     po.Register("binary", &binary_write, "Write output in binary mode");
     po.Register("use-gpu", &use_gpu,
                 "yes|no|optional|wait, only has effect if compiled with CUDA");
+    po.Register("priors", &priors_file, "priors file");
 
     combine_config.Register(&po);
     chain_config.Register(&po);
@@ -77,6 +78,10 @@ int main(int argc, char *argv[]) {
     Nnet nnet;
     ReadKaldiObject(raw_nnet_rxfilename, &nnet);
 
+    Vector<BaseFloat> vec;
+    bool binary_in;
+    Input ki(priors_file, &binary_in);
+    vec.Read(ki.Stream(), binary_in, false);
 
     std::vector<NnetChainExample> egs;
     egs.reserve(10000);  // reserve a lot of space to minimize the chance of
@@ -94,7 +99,7 @@ int main(int argc, char *argv[]) {
 
     int32 num_nnets = po.NumArgs() - 3;
     NnetChainCombiner combiner(combine_config, chain_config,
-                               num_nnets, egs, den_fst, nnet);
+                               num_nnets, egs, den_fst, vec, nnet);
 
     for (int32 n = 1; n < num_nnets; n++) {
       std::string this_nnet_rxfilename = po.GetArg(n + 2);

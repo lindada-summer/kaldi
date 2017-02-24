@@ -28,12 +28,15 @@ namespace chain {
 void ComputeChainObjfAndDeriv(const ChainTrainingOptions &opts,
                               const DenominatorGraph &den_graph,
                               const Supervision &supervision,
-                              const CuMatrixBase<BaseFloat> &nnet_output,
+                              const CuMatrixBase<BaseFloat> &nnet_out,
+			      const CuVectorBase<BaseFloat> &log_priors,
                               BaseFloat *objf,
                               BaseFloat *l2_term,                              
                               BaseFloat *weight,
                               CuMatrixBase<BaseFloat> *nnet_output_deriv,
                               CuMatrixBase<BaseFloat> *xent_output_deriv) {
+  CuMatrix<BaseFloat> nnet_output(nnet_out);
+  nnet_output.AddVecToRows(-1.0, log_priors, 1.0);
   BaseFloat num_logprob_weighted;
   if (nnet_output_deriv)
     nnet_output_deriv->SetZero();
@@ -54,34 +57,20 @@ void ComputeChainObjfAndDeriv(const ChainTrainingOptions &opts,
       numerator.Backward(xent_output_deriv);
     }
   }
-  DenominatorComputation denominator(opts, den_graph,
-                                     supervision.num_sequences,
-                                     nnet_output);
+  //  DenominatorComputation denominator(opts, den_graph,
+  //                                   supervision.num_sequences,
+  //                                   nnet_output);
 
-  BaseFloat den_logprob = denominator.Forward();
-  bool ok = true;
-  if (nnet_output_deriv)
-    ok = denominator.Backward(-supervision.weight,
-                              nnet_output_deriv);
+  //BaseFloat den_logprob = denominator.Forward();
+  //bool ok = true;
+  //if (nnet_output_deriv)
+  //  ok = denominator.Backward(-supervision.weight,
+  //                            nnet_output_deriv);
 
-  *objf = num_logprob_weighted - supervision.weight * den_logprob;
+  *objf = num_logprob_weighted;
   *weight = supervision.weight * supervision.num_sequences *
       supervision.frames_per_sequence;
-  if (!((*objf) - (*objf) == 0) || !ok) {
-    // inf or NaN detected, or denominator computation returned false.
-    if (nnet_output_deriv)
-      nnet_output_deriv->SetZero();
-    if (xent_output_deriv)
-      xent_output_deriv->SetZero();
-    BaseFloat default_objf = -10;
-    KALDI_WARN << "Objective function is " << (*objf)
-               << " and denominator computation (if done) returned "
-               << std::boolalpha << ok
-               << ", setting objective function to " << default_objf
-               << " per frame.";
-    *objf  = default_objf * *weight;
-  }
-
+  
   // This code helps us see how big the derivatives are, on average,
   // for different frames of the sequences.  As expected, they are
   // smaller towards the edges of the sequences (due to the penalization

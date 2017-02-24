@@ -302,6 +302,12 @@ def train(args, run_opts, background_process_handler):
         chain_lib.create_denominator_fst(args.dir, args.tree_dir, run_opts)
 
     if (args.stage <= -4):
+        logger.info("Computing priors..................")
+        common_train_lib.compute_presoftmax_prior_scale(
+                args.dir, args.tree_dir, num_jobs, run_opts,
+                presoftmax_prior_scale_power=0.0)
+        
+    if (args.stage <= -4):
         logger.info("Initializing a basic network for estimating "
                     "preconditioning matrix")
         common_lib.run_kaldi_command(

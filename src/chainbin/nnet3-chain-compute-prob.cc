@@ -45,8 +45,10 @@ int main(int argc, char *argv[]) {
 
     NnetComputeProbOptions nnet_opts;
     chain::ChainTrainingOptions chain_opts;
+    std::string priors_file = "";
 
     ParseOptions po(usage);
+    po.Register("priors", &priors_file, "priors file");
 
     nnet_opts.Register(&po);
     chain_opts.Register(&po);
@@ -68,7 +70,12 @@ int main(int argc, char *argv[]) {
     fst::StdVectorFst den_fst;
     ReadFstKaldi(den_fst_rxfilename, &den_fst);
 
-    NnetChainComputeProb chain_prob_computer(nnet_opts, chain_opts, den_fst,
+    Vector<BaseFloat> vec;
+    bool binary_in;
+    Input ki(priors_file, &binary_in);
+    vec.Read(ki.Stream(), binary_in, false);
+
+    NnetChainComputeProb chain_prob_computer(nnet_opts, chain_opts, den_fst, vec,
                                             nnet);
 
     SequentialNnetChainExampleReader example_reader(examples_rspecifier);

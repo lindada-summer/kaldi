@@ -232,10 +232,10 @@ def compute_presoftmax_prior_scale(dir, alidir, num_jobs, run_opts,
             presoftmax_prior_scale_power=presoftmax_prior_scale_power,
             smooth=0.01)
 
-    output_file = "{0}/presoftmax_prior_scale.vec".format(dir)
+    output_file = "{0}/priors.vec".format(dir)
     common_lib.write_kaldi_matrix(output_file, [scaled_counts])
-    common_lib.force_symlink("../presoftmax_prior_scale.vec",
-                             "{0}/configs/presoftmax_prior_scale.vec".format(
+    common_lib.force_symlink("../priors.vec",
+                             "{0}/configs/priors.vec".format(
                                 dir))
 
 
@@ -243,14 +243,15 @@ def smooth_presoftmax_prior_scale_vector(pdf_counts,
                                          presoftmax_prior_scale_power=-0.25,
                                          smooth=0.01):
     total = sum(pdf_counts)
-    average_count = total/len(pdf_counts)
+    #average_count = total/len(pdf_counts)
     scales = []
-    for i in range(len(pdf_counts)):
-        scales.append(math.pow(pdf_counts[i] + smooth * average_count,
-                               presoftmax_prior_scale_power))
-    num_pdfs = len(pdf_counts)
-    scaled_counts = map(lambda x: x * float(num_pdfs) / sum(scales), scales)
-    return scaled_counts
+    k = 1
+    N = len(pdf_counts)
+    for i in range(N):
+        scales.append(float(pdf_counts[i] + 1)/(total + N*k))
+    #num_pdfs = len(pdf_counts)
+    #scaled_counts = map(lambda x: x * float(num_pdfs) / sum(scales), scales)
+    return scales
 
 
 def prepare_initial_network(dir, run_opts, srand=-3):

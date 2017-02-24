@@ -43,12 +43,13 @@ int main(int argc, char *argv[]) {
     bool binary_write = true;
     std::string use_gpu = "yes";
     NnetChainTrainingOptions opts;
+    std::string priors_file = "";
 
     ParseOptions po(usage);
     po.Register("binary", &binary_write, "Write output in binary mode");
     po.Register("use-gpu", &use_gpu,
                 "yes|no|optional|wait, only has effect if compiled with CUDA");
-
+    po.Register("priors", &priors_file, "priors file");
     opts.Register(&po);
 
     po.Read(argc, argv);
@@ -69,6 +70,10 @@ int main(int argc, char *argv[]) {
 
     Nnet nnet;
     ReadKaldiObject(nnet_rxfilename, &nnet);
+    Vector<BaseFloat> vec;
+    bool binary_in;
+    Input ki(priors_file, &binary_in);
+    vec.Read(ki.Stream(), binary_in, false);
 
     bool ok;
 
@@ -76,7 +81,7 @@ int main(int argc, char *argv[]) {
       fst::StdVectorFst den_fst;
       ReadFstKaldi(den_fst_rxfilename, &den_fst);
 
-      NnetChainTrainer trainer(opts, den_fst, &nnet);
+      NnetChainTrainer trainer(opts, den_fst, vec, &nnet);
 
       SequentialNnetChainExampleReader example_reader(examples_rspecifier);
 

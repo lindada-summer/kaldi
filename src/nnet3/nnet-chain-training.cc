@@ -26,12 +26,13 @@ namespace nnet3 {
 
 NnetChainTrainer::NnetChainTrainer(const NnetChainTrainingOptions &opts,
                                    const fst::StdVectorFst &den_fst,
+				   const VectorBase<BaseFloat> &priors,
                                    Nnet *nnet):
     opts_(opts),
     den_graph_(den_fst, nnet->OutputDim("output")),
     nnet_(nnet),
     compiler_(*nnet, opts_.nnet_config.optimize_config),
-    num_minibatches_processed_(0) {
+    num_minibatches_processed_(0), log_priors_(priors) {
   if (opts.nnet_config.zero_component_stats)
     ZeroComponentStats(nnet);
   KALDI_ASSERT(opts.nnet_config.momentum >= 0.0 &&
@@ -55,6 +56,7 @@ NnetChainTrainer::NnetChainTrainer(const NnetChainTrainingOptions &opts,
                     "Probably this is the first training iteration.";
     }
   }
+  log_priors_.ApplyLog();
 }
 
 
@@ -110,7 +112,7 @@ void NnetChainTrainer::ProcessOutputs(const NnetChainExample &eg,
     BaseFloat tot_objf, tot_l2_term, tot_weight;
 
     ComputeChainObjfAndDeriv(opts_.chain_config, den_graph_,
-                             sup.supervision, nnet_output,
+                             sup.supervision, nnet_output, log_priors_,
                              &tot_objf, &tot_l2_term, &tot_weight,
                              &nnet_output_deriv,
                              (use_xent ? &xent_deriv : NULL));

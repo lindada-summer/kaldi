@@ -50,6 +50,7 @@ class NnetChainCombiner {
                     int32 num_nnets,
                     const std::vector<NnetChainExample> &egs,
                     const fst::StdVectorFst &den_fst,
+		    const VectorBase<BaseFloat> &priors,
                     const Nnet &first_nnet);
 
   /// You should call this function num_nnets-1 times after calling

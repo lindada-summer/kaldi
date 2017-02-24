@@ -27,6 +27,7 @@ NnetChainComputeProb::NnetChainComputeProb(
     const NnetComputeProbOptions &nnet_config,
     const chain::ChainTrainingOptions &chain_config,
     const fst::StdVectorFst &den_fst,
+    const VectorBase<BaseFloat> &priors,
     const Nnet &nnet):
     nnet_config_(nnet_config),
     chain_config_(chain_config),
@@ -34,12 +35,13 @@ NnetChainComputeProb::NnetChainComputeProb(
     nnet_(nnet),
     compiler_(nnet, nnet_config_.optimize_config),
     deriv_nnet_(NULL),
-    num_minibatches_processed_(0) {
+    num_minibatches_processed_(0), log_priors_(priors) {
   if (nnet_config_.compute_deriv) {
     deriv_nnet_ = new Nnet(nnet_);
     bool is_gradient = true;  // force simple update
     SetZero(is_gradient, deriv_nnet_);
   }
+  log_priors_.ApplyLog();
 }
 
 const Nnet &NnetChainComputeProb::GetDeriv() const {
@@ -115,7 +117,7 @@ void NnetChainComputeProb::ProcessOutputs(const NnetChainExample &eg,
     BaseFloat tot_like, tot_l2_term, tot_weight;
     
     ComputeChainObjfAndDeriv(chain_config_, den_graph_,
-                             sup.supervision, nnet_output,
+                             sup.supervision, nnet_output, log_priors_,
                              &tot_like, &tot_l2_term, &tot_weight,
                              (nnet_config_.compute_deriv ? &nnet_output_deriv :
                               NULL), (use_xent ? &xent_deriv : NULL));

@@ -57,6 +57,7 @@ class NnetChainComputeProb {
   NnetChainComputeProb(const NnetComputeProbOptions &nnet_config,
                        const chain::ChainTrainingOptions &chain_config,
                        const fst::StdVectorFst &den_fst,
+		       const VectorBase<BaseFloat> &priors,
                        const Nnet &nnet);
 
   // Reset the likelihood stats, and the derivative stats (if computed).
@@ -90,7 +91,7 @@ class NnetChainComputeProb {
   int32 num_minibatches_processed_;  // this is only for diagnostics
 
   unordered_map<std::string, ChainObjectiveInfo, StringHasher> objf_info_;
-
+  CuVector<BaseFloat> log_priors_;  
 };
 
 

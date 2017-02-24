@@ -160,7 +160,7 @@ def train_new_models(dir, iter, srand, num_jobs,
 
         process_handle = common_lib.run_job(
             """{command} {train_queue_opt} {dir}/log/train.{iter}.{job}.log \
-                    nnet3-chain-train {parallel_train_opts} \
+                    nnet3-chain-train {parallel_train_opts} --priors={dir}/priors.vec \
                     --apply-deriv-weights={app_deriv_wts} \
                     --l2-regularize={l2} --leaky-hmm-coefficient={leaky} \
                     {cache_io_opts}  --xent-regularize={xent_reg} \
@@ -470,7 +470,7 @@ def compute_train_cv_probabilities(dir, iter, egs_dir, left_context,
 
     common_lib.run_job(
         """{command} {dir}/log/compute_prob_valid.{iter}.log \
-                nnet3-chain-compute-prob --l2-regularize={l2} \
+                nnet3-chain-compute-prob --l2-regularize={l2}  --priors={dir}/priors.vec \
                 --leaky-hmm-coefficient={leaky} --xent-regularize={xent_reg} \
                 "nnet3-am-copy --raw=true {model} - |" {dir}/den.fst \
                 "ark,bg:nnet3-chain-copy-egs --left-context={lc} \
@@ -485,7 +485,7 @@ def compute_train_cv_probabilities(dir, iter, egs_dir, left_context,
 
     common_lib.run_job(
         """{command} {dir}/log/compute_prob_train.{iter}.log \
-                nnet3-chain-compute-prob --l2-regularize={l2} \
+                nnet3-chain-compute-prob --l2-regularize={l2} --priors={dir}/priors.vec \
                 --leaky-hmm-coefficient={leaky} --xent-regularize={xent_reg} \
                 "nnet3-am-copy --raw=true {model} - |" {dir}/den.fst \
                 "ark,bg:nnet3-chain-copy-egs --left-context={lc} \
@@ -546,7 +546,7 @@ def combine_models(dir, num_iters, models_to_combine, num_chunk_per_minibatch,
 
     common_lib.run_job(
         """{command} {combine_queue_opt} {dir}/log/combine.log \
-                nnet3-chain-combine --num-iters=40 \
+                nnet3-chain-combine --num-iters=40 --priors={dir}/priors.vec \
                 --l2-regularize={l2} --leaky-hmm-coefficient={leaky} \
                 --enforce-sum-to-one=true --enforce-positive-weights=true \
                 --verbose=3 {dir}/den.fst {raw_models} \

@@ -56,6 +56,7 @@ class NnetChainTrainer {
  public:
   NnetChainTrainer(const NnetChainTrainingOptions &config,
                    const fst::StdVectorFst &den_fst,
+		   const VectorBase<BaseFloat> &priors,
                    Nnet *nnet);
 
   // train on one minibatch.
@@ -99,6 +100,7 @@ class NnetChainTrainer {
   int32 num_max_change_global_applied_;
 
   unordered_map<std::string, ObjectiveFunctionInfo, StringHasher> objf_info_;
+  CuVector<BaseFloat> log_priors_;
 };
 
 
