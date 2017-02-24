@@ -65,8 +65,6 @@ DenominatorComputation::DenominatorComputation(
       exp_nnet_output_transposed_.ApplyHeaviside();
     exp_nnet_output_transposed_.Scale(-opts_.boost);
     exp_nnet_output_transposed_.AddMat(1.0, nnet_output, kTrans);
-  } else {
-    exp_nnet_output_transposed_.CopyFromMat(nnet_output, kTrans);
   }
   exp_nnet_output_transposed_.ApplyExp();
 }
