@@ -306,10 +306,6 @@ def train(args, run_opts, background_process_handler):
         chain_lib.create_phone_lm(args.dir, args.tree_dir, run_opts,
                                   lm_opts=args.lm_opts)
 
-    if (args.stage <= -5):
-        logger.info("Creating denominator FST")
-        chain_lib.create_denominator_fst(args.dir, args.tree_dir, run_opts)
-
     if (args.stage <= -4):
         logger.info("Initializing a basic network for estimating "
                     "preconditioning matrix")
@@ -318,6 +314,14 @@ def train(args, run_opts, background_process_handler):
                     nnet3-init --srand=-2 {dir}/configs/init.config \
                     {dir}/init.raw""".format(command=run_opts.command,
                                              dir=args.dir))
+
+    if (args.stage <= -4):
+        logger.info("Preparing the initial acoustic model and setting transition probs...")
+        chain_lib.prepare_initial_acoustic_model(args.dir, run_opts, args.tree_dir)
+
+    if (args.stage <= -4):
+        logger.info("Creating denominator FST...")
+        chain_lib.create_denominator_fst(args.dir, run_opts)
 
     egs_left_context = left_context + args.frame_subsampling_factor / 2
     egs_right_context = right_context + args.frame_subsampling_factor / 2
@@ -384,8 +388,9 @@ def train(args, run_opts, background_process_handler):
             rand_prune=args.rand_prune)
 
     if (args.stage <= -1):
-        logger.info("Preparing the initial acoustic model.")
-        chain_lib.prepare_initial_acoustic_model(args.dir, run_opts)
+        logger.info("Preparing the initial acoustic model and setting transition probs...")
+        chain_lib.prepare_initial_acoustic_model(args.dir, run_opts, args.tree_dir)
+
 
     with open("{0}/frame_subsampling_factor".format(args.dir), "w") as f:
         f.write(str(args.frame_subsampling_factor))

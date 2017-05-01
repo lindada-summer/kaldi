@@ -48,10 +48,10 @@ def create_phone_lm(dir, tree_dir, run_opts, lm_opts=None):
         tree_dir=tree_dir))
 
 
-def create_denominator_fst(dir, tree_dir, run_opts):
+def create_denominator_fst(dir, run_opts):
     common_lib.run_job(
-        """copy-transition-model {tree_dir}/final.mdl \
-                {dir}/0.trans_mdl""".format(dir=dir, tree_dir=tree_dir))
+        """copy-transition-model {dir}/0.mdl \
+                {dir}/0.trans_mdl""".format(dir=dir))
     common_lib.run_job(
         """{command} {dir}/log/make_den_fst.log \
                    chain-make-den-fst {dir}/tree {dir}/0.trans_mdl \
@@ -447,7 +447,7 @@ def compute_preconditioning_matrix(dir, egs_dir, num_lda_jobs, run_opts,
     common_lib.force_symlink("../lda.mat", "{0}/configs/lda.mat".format(dir))
 
 
-def prepare_initial_acoustic_model(dir, run_opts, srand=-1):
+def prepare_initial_acoustic_model(dir, run_opts, tree_dir, srand=-1):
     """ Adds the first layer; this will also add in the lda.mat and
         presoftmax_prior_scale.vec. It will also prepare the acoustic model
         with the transition model."""
@@ -463,9 +463,11 @@ def prepare_initial_acoustic_model(dir, run_opts, srand=-1):
     # before concatenating them.
     common_lib.run_job(
         """{command} {dir}/log/init_mdl.log \
-                nnet3-am-init {dir}/0.trans_mdl {dir}/0.raw \
-                {dir}/0.mdl""".format(command=run_opts.command, dir=dir))
-
+                nnet3-am-init {tdir}/final.mdl {dir}/0.raw - \| \
+                nnet3-am-train-transitions --set-priors=false - \
+                "ark:gunzip -c {tdir}/ali.*.gz|" {dir}/0.mdl
+        """.format(command=run_opts.command,
+                   dir=dir, tdir=tree_dir))
 
 def compute_train_cv_probabilities(dir, iter, egs_dir, left_context,
                                    right_context, l2_regularize,
