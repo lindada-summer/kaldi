@@ -60,10 +60,11 @@ struct ChainTrainingOptions {
   // the network is expected to have an output named 'output-xent', which
   // should have a softmax as its final nonlinearity.
   BaseFloat xent_regularize;
+  bool disable_mmi;
 
   ChainTrainingOptions(): l2_regularize(0.0), leaky_hmm_coefficient(1.0e-05),
-                          xent_regularize(0.0) { }
-  
+                          xent_regularize(0.0), disable_mmi(false) { }
+
   void Register(OptionsItf *opts) {
     opts->Register("l2-regularize", &l2_regularize, "l2 regularization "
                    "constant for 'chain' training, applied to the output "
@@ -78,6 +79,7 @@ struct ChainTrainingOptions {
                    "nonzero, the network is expected to have an output "
                    "named 'output-xent', which should have a softmax as "
                    "its final nonlinearity.");
+    opts->Register("disable-mmi", &disable_mmi, "Use only the num graph");
   }
 };
 
@@ -121,7 +123,7 @@ void ComputeChainObjfAndDeriv(const ChainTrainingOptions &opts,
                               BaseFloat *weight,
                               CuMatrixBase<BaseFloat> *nnet_output_deriv,
                               CuMatrixBase<BaseFloat> *xent_output_deriv = NULL);
-                              
+
 
 
 }  // namespace chain

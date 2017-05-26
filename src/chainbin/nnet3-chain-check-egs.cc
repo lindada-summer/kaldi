@@ -19,6 +19,7 @@ int main(int argc, char *argv[]) {
     typedef kaldi::int32 int32;
     typedef kaldi::int64 int64;
 
+
     const char *usage =
         "Usage:  nnet3-chain-check-egs [options] <egs-rspecifier>\n";
 
@@ -26,17 +27,59 @@ int main(int argc, char *argv[]) {
 //    int32 minibatch_size = 64;
     std::string use_gpu = "no";
     int32 n = 1;
+    bool subtract = true;
 
     ParseOptions po(usage);
 //    po.Register("minibatch-size", &minibatch_size, "Target size of minibatches "
 //                "when merging (see also --measure-output-frames)");
-//    po.Register("compress", &compress, "If true, compress the output examples "
-//                "(not recommended unless you are writing to disk");
+    po.Register("subtract", &subtract, "subtract logprobs or not");
     po.Register("use-gpu", &use_gpu,
                 "yes|no|optional|wait, only has effect if compiled with CUDA");
     po.Register("n", &n, "number of egs to check");
     po.Read(argc, argv);
 
+
+    {
+      StdVectorFst num3;
+      ReadFstKaldi("num3.fst", &num3);
+      //StdVectorFst den;
+      //ReadFstKaldi("den.fst", &den);
+      Supervision sup;
+      sup.frames_per_sequence = 3;
+      sup.label_dim = 10;
+      sup.fst = num3;
+      sup.e2e_fsts.push_back(num3);
+      NumeratorGraph numg(sup, true);
+      //num3g.PrintInfo(true);
+      CuMatrix<BaseFloat>
+            deriv1(3, 10, kSetZero),
+            deriv2(3, 10, kSetZero);
+      //std::cout << "fst:\n";
+//    sup.Write(std::cout, false); std::cout << "\n";
+    
+      //DenominatorGraph deng(den, sup.label_dim);
+      CuMatrix<BaseFloat> obs_mat(sup.frames_per_sequence, sup.label_dim);
+      for (int t = 0; t < obs_mat.NumRows(); t++)
+        for (int j = 0; j < obs_mat.NumCols(); j++) {
+          int pdfid = j + 1;
+          obs_mat(t, j) = Log((float)((t+1)*(pdfid+1) % 4 + 1));
+        }
+//    obs_mat.Write(std::cout, false);
+      ChainTrainingOptions copts;
+      FullNumeratorComputation numc(copts, numg, obs_mat);
+      BaseFloat full_num_logprob = numc.Forward();
+      numc.Backward(1.0, &deriv1);
+      std::cout << "full num log prob: " << full_num_logprob << "\n";
+      deriv1.Write(std::cout, false);
+      NumeratorComputation nc(sup, obs_mat);
+      BaseFloat num_logprob = nc.Forward();
+      nc.Backward(&deriv2);
+      std::cout << "num log prob: " << num_logprob << "\n";
+      deriv2.Write(std::cout, false);
+    }
+
+
+    
     if (po.NumArgs() != 1) {
       po.PrintUsage();
       exit(1);
@@ -74,7 +117,7 @@ int main(int argc, char *argv[]) {
       Profiler pf;
 
       pf.tic("numGraph");
-      NumeratorGraph ng(eg.outputs[0].supervision, true);
+      NumeratorGraph ng(eg.outputs[0].supervision, subtract);
       ng.PrintInfo(false);
       pf.tac();
 
@@ -89,6 +132,14 @@ int main(int argc, char *argv[]) {
       random_nnet_output.ApplyLogSoftMaxPerRow(random_nnet_output);
       pf.tac();
 
+      CuMatrix<BaseFloat> obs_mat(T, N);
+      for (int t = 0; t < obs_mat.NumRows(); t++)
+	for (int j = 0; j < obs_mat.NumCols(); j++) {
+	  int pdfid = j + 1;
+	  obs_mat(t, j) = Log((float)((t+1)*(pdfid+1) % 4 + 1));
+	}
+      random_nnet_output = obs_mat;
+      
        /*
       pf.tic("on-CPU");
       NumeratorComputation numerator(eg.outputs[0].supervision, random_nnet_output);

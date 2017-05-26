@@ -33,6 +33,7 @@ dir=$3
 oov_sym=`cat $lang/oov.int` || exit 1;
 
 mkdir -p $dir/log
+
 echo $nj > $dir/num_jobs
 sdata=$data/split$nj;
 [[ -d $sdata && $data/feats.scp -ot $sdata ]] || split_data.sh $data $nj || exit 1;
@@ -48,6 +49,7 @@ if [ $stage -le 0 ]; then
   $cmd $dir/log/init_mono_mdl_tree.log \
     gmm-init-mono $shared_phones_opt $lang/topo 10 \
     $dir/0.mdl $dir/tree || exit 1;
+  copy-transition-model $dir/0.mdl $dir/0.trans_mdl
 fi
 
 if [ $stage -le 1 ]; then
@@ -55,6 +57,6 @@ if [ $stage -le 1 ]; then
   $cmd JOB=1:$nj $dir/log/compile_graphs.JOB.log \
     compile-train-graphs --read-disambig-syms=$lang/phones/disambig.int $dir/tree $dir/0.mdl $lang/L.fst \
     "ark:sym2int.pl --map-oov $oov_sym -f 2- $lang/words.txt < $sdata/JOB/text|" \
-    "ark:|gzip -c >$dir/fsts.JOB.gz" || exit 1;
+    "ark,scp:$dir/fst.JOB.ark,$dir/fst.JOB.scp" || exit 1;
 fi
 

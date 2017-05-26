@@ -21,6 +21,7 @@
 
 #ifndef KALDI_CHAIN_CHAIN_FULL_NUMERATOR_H_
 #define KALDI_CHAIN_CHAIN_FULL_NUMERATOR_H_
+#define BFloat double
 
 #include <vector>
 #include <map>
@@ -105,14 +106,14 @@ class FullNumeratorComputation {
   // the derivs w.r.t. the nnet outputs (transposed)
   Matrix<BaseFloat> nnet_output_deriv_transposed_;
 
-  Matrix<BaseFloat> alpha_;
+  Matrix<BFloat> alpha_;
 
-  Matrix<BaseFloat> beta_;
+  Matrix<BFloat> beta_;
 
-  Vector<BaseFloat> tot_prob_;
+  Vector<BFloat> tot_prob_;
 
   // the log of tot_prob_.
-  Vector<BaseFloat> tot_log_prob_;
+  Vector<BFloat> tot_log_prob_;
 
   bool ok_;
 };

@@ -49,6 +49,18 @@ static bool ProcessFile(const ExampleGenerationConfig &opts,
                         const std::string &utt_id,
                         bool compress,
                         NnetChainExampleWriter *example_writer) {
+// TODO(hhadian)
+// check feats.NumRows() and if it is not equal to an allowed num-frames
+// delete a few frames from beginning or end
+  bool found = false;
+  for (int32 i = 0; i < opts.num_frames.size(); i++)
+    if (feats.NumRows() == opts.num_frames[i]) {
+      found = true;
+      break;
+    }
+  if (!found)
+    KALDI_WARN << "No exact match found for the length of utt " << utt_id
+               << " which has length: " << feats.NumRows();
 
   int32 num_input_frames = feats.NumRows(),
         factor = opts.frame_subsampling_factor,
@@ -244,7 +256,7 @@ int main(int argc, char *argv[]) {
       if (!feat_reader.HasKey(key)) {
         num_err++;
         KALDI_WARN << "No features for utterance " << key;
-        break;
+        //break;
       } else {
         const Matrix<BaseFloat> &features = feat_reader.Value(key);
         VectorFst<StdArc> fst(fst_reader.Value());

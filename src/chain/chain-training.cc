@@ -21,6 +21,8 @@
 #include "chain/chain-kernels-ansi.h"
 #include "chain/chain-numerator.h"
 #include "chain/chain-denominator.h"
+#include "chain/chain-num-graph.h"
+#include "chain/chain-full-numerator.h"
 
 namespace kaldi {
 namespace chain {
@@ -37,7 +39,8 @@ void ComputeChainObjfAndDeriv(const ChainTrainingOptions &opts,
   BaseFloat num_logprob_weighted;
   if (nnet_output_deriv)
     nnet_output_deriv->SetZero();
-  {
+  bool num_ok = true;
+  if (!supervision.e2e) {
     NumeratorComputation numerator(supervision, nnet_output);
     // note: supervision.weight is included as a factor in the derivative from
     // the numerator object, and the logprob too.
@@ -53,21 +56,38 @@ void ComputeChainObjfAndDeriv(const ChainTrainingOptions &opts,
       xent_output_deriv->SetZero();
       numerator.Backward(xent_output_deriv);
     }
+  } else {
+    NumeratorGraph ng(supervision, true);
+    FullNumeratorComputation fnum(opts, ng, nnet_output);
+    num_logprob_weighted = fnum.Forward();
+    if (nnet_output_deriv)
+      num_ok = fnum.Backward(supervision.weight, nnet_output_deriv);
+    //if (!ok)
+    //  KALDI_ERR << "full supervision computation failed";
   }
-  DenominatorComputation denominator(opts, den_graph,
-                                     supervision.num_sequences,
-                                     nnet_output);
+  KALDI_LOG << "######### num_logprob_weighted: " << num_logprob_weighted;
 
-  BaseFloat den_logprob = denominator.Forward();
   bool ok = true;
-  if (nnet_output_deriv)
-    ok = denominator.Backward(-supervision.weight,
-                              nnet_output_deriv);
+  BaseFloat den_logprob = 0.0;
+  if (!opts.disable_mmi) {
+    DenominatorComputation denominator(opts, den_graph,
+                                       supervision.num_sequences,
+                                       nnet_output);
 
+    den_logprob = denominator.Forward();
+    KALDI_LOG << "######### den logprob : " << den_logprob;
+
+    if (nnet_output_deriv)
+      ok = denominator.Backward(-supervision.weight,
+                                nnet_output_deriv);
+
+  }
   *objf = num_logprob_weighted - supervision.weight * den_logprob;
+  KALDI_LOG << "######### objf: " << *objf;
+
   *weight = supervision.weight * supervision.num_sequences *
       supervision.frames_per_sequence;
-  if (!((*objf) - (*objf) == 0) || !ok) {
+  if (!((*objf) - (*objf) == 0) || !ok || !num_ok) {
     // inf or NaN detected, or denominator computation returned false.
     if (nnet_output_deriv)
       nnet_output_deriv->SetZero();
@@ -76,7 +96,7 @@ void ComputeChainObjfAndDeriv(const ChainTrainingOptions &opts,
     BaseFloat default_objf = -10;
     KALDI_WARN << "Objective function is " << (*objf)
                << " and denominator computation (if done) returned "
-               << std::boolalpha << ok
+               << std::boolalpha << ok << " " << num_ok
                << ", setting objective function to " << default_objf
                << " per frame.";
     *objf  = default_objf * *weight;
