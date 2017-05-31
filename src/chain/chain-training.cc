@@ -23,9 +23,49 @@
 #include "chain/chain-denominator.h"
 #include "chain/chain-num-graph.h"
 #include "chain/chain-full-numerator.h"
+#include "hmm/transition-model.h"
+#include "fstext/fstext-lib.h"
 
 namespace kaldi {
 namespace chain {
+
+bool TryEqualAlign(const Supervision &supervision, BaseFloat *objf,
+                   CuMatrixBase<BaseFloat> *nnet_output_deriv) {
+  typedef kaldi::int32 int32;
+  using fst::SymbolTable;
+  using fst::VectorFst;
+  using fst::StdArc;
+  int32 rand_seed = 27;
+  int32 T = supervision.frames_per_sequence;
+  int32 B = supervision.num_sequences;
+  int32 N = supervision.label_dim;
+  *objf = 0.0;
+  Matrix<BaseFloat> deriv;
+  if (nnet_output_deriv)
+    deriv.Resize(nnet_output_deriv->NumRows(), nnet_output_deriv->NumCols(),
+                 kSetZero);
+  for (int32 s = 0; s < B; s++) {
+    VectorFst<StdArc> path;
+    if (EqualAlign(supervision.e2e_fsts[s], T, rand_seed, &path) ) {
+      std::vector<int32> aligned_seq;
+      StdArc::Weight w;
+      GetLinearSymbolSequence(path, &aligned_seq, (std::vector<int32> *)NULL, &w);
+      KALDI_ASSERT(aligned_seq.size() == T);
+      *objf -= w.Value();
+      if (nnet_output_deriv) {
+        for (int32 t = 0; t < T; t++)
+          deriv(t*B + s, aligned_seq[t] - 1) = 1.0;
+      }
+    } else {
+      KALDI_WARN << "AlignEqual: failed on seq: " << s;
+      return false;
+    }
+  }
+  if (nnet_output_deriv)
+    nnet_output_deriv->CopyFromMat(deriv);
+  return true;
+}
+
 
 void ComputeChainObjfAndDeriv(const ChainTrainingOptions &opts,
                               const DenominatorGraph &den_graph,
@@ -57,15 +97,32 @@ void ComputeChainObjfAndDeriv(const ChainTrainingOptions &opts,
       numerator.Backward(xent_output_deriv);
     }
   } else {
-    NumeratorGraph ng(supervision, true);
+    NumeratorGraph ng(supervision, false);
     FullNumeratorComputation fnum(opts, ng, nnet_output);
     num_logprob_weighted = fnum.Forward();
-    if (nnet_output_deriv)
+    KALDI_LOG << "######### num_logprob_weighted: " << num_logprob_weighted;
+    /*if (num_logprob_weighted - num_logprob_weighted != 0) {
+      std::ofstream os1("nnet-output.txt");
+      nnet_output.Write(os1, false);
+      os1.close();
+      std::ofstream os2("supervision.txt");
+      supervision.Write(os2, false);
+      os2.close();
+      KALDI_ERR << "NUM FAILED";
+    }*/
+    num_ok = (num_logprob_weighted - num_logprob_weighted == 0);
+    if (!num_ok)
+    KALDI_LOG << "FB failed. Trying equal-align...";
+    if (nnet_output_deriv && num_ok)
       num_ok = fnum.Backward(supervision.weight, nnet_output_deriv);
     //if (!ok)
     //  KALDI_ERR << "full supervision computation failed";
+    if (!num_ok) {
+      num_ok = TryEqualAlign(supervision, &num_logprob_weighted, nnet_output_deriv);
+      KALDI_LOG << "######### EqualAlign logprob: " << num_logprob_weighted << "     ok:" << num_ok;
+    }
   }
-  KALDI_LOG << "######### num_logprob_weighted: " << num_logprob_weighted;
+
 
   bool ok = true;
   BaseFloat den_logprob = 0.0;

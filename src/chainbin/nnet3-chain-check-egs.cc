@@ -27,7 +27,7 @@ int main(int argc, char *argv[]) {
 //    int32 minibatch_size = 64;
     std::string use_gpu = "no";
     int32 n = 1;
-    bool subtract = true;
+    bool subtract = true, mini_test = false;
 
     ParseOptions po(usage);
 //    po.Register("minibatch-size", &minibatch_size, "Target size of minibatches "
@@ -36,10 +36,11 @@ int main(int argc, char *argv[]) {
     po.Register("use-gpu", &use_gpu,
                 "yes|no|optional|wait, only has effect if compiled with CUDA");
     po.Register("n", &n, "number of egs to check");
+    po.Register("mini-test", &mini_test, "run minitest or not");
     po.Read(argc, argv);
 
 
-    {
+    if (mini_test) {
       StdVectorFst num3;
       ReadFstKaldi("num3.fst", &num3);
       //StdVectorFst den;
@@ -56,7 +57,7 @@ int main(int argc, char *argv[]) {
             deriv2(3, 10, kSetZero);
       //std::cout << "fst:\n";
 //    sup.Write(std::cout, false); std::cout << "\n";
-    
+
       //DenominatorGraph deng(den, sup.label_dim);
       CuMatrix<BaseFloat> obs_mat(sup.frames_per_sequence, sup.label_dim);
       for (int t = 0; t < obs_mat.NumRows(); t++)
@@ -64,7 +65,7 @@ int main(int argc, char *argv[]) {
           int pdfid = j + 1;
           obs_mat(t, j) = Log((float)((t+1)*(pdfid+1) % 4 + 1));
         }
-//    obs_mat.Write(std::cout, false);
+      obs_mat.Write(std::cout, false);
       ChainTrainingOptions copts;
       FullNumeratorComputation numc(copts, numg, obs_mat);
       BaseFloat full_num_logprob = numc.Forward();
@@ -79,7 +80,7 @@ int main(int argc, char *argv[]) {
     }
 
 
-    
+
     if (po.NumArgs() != 1) {
       po.PrintUsage();
       exit(1);
@@ -139,7 +140,6 @@ int main(int argc, char *argv[]) {
 	  obs_mat(t, j) = Log((float)((t+1)*(pdfid+1) % 4 + 1));
 	}
       random_nnet_output = obs_mat;
-      
        /*
       pf.tic("on-CPU");
       NumeratorComputation numerator(eg.outputs[0].supervision, random_nnet_output);
