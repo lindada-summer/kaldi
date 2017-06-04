@@ -11,7 +11,17 @@
 # Final train prob (xent)         0.000     0.000     0.000
 # Final valid prob (xent)        0.0000    0.0000    0.0000
 
+# local/chain/compare_wer_general.sh e2e_1f_l2n1fifth
+# System                e2e_1f_l2n1fifth
+# WER on train_dev(tg)      29.56
+# WER on train_dev(fg)      28.24
+# WER on eval2000(tg)        30.8
+# WER on eval2000(fg)        29.2
+# Final train prob         -0.293
+# Final valid prob         -0.307
 
+
+# TO TRY: full set (no nodup)
 set -e
 
 # configs for 'chain'
@@ -40,6 +50,10 @@ dim=800
 frames_per_iter=2500000
 cmvn_opts="--norm-means=true --norm-vars=true"
 leaky_hmm_coeff=0.1
+hid_max_change=0.75
+final_max_change=1.5
+self_repair=1e-5
+
 # End configuration section.
 echo "$0 $@"  # Print the command line for logging
 
@@ -97,17 +111,17 @@ if [ $stage -le 12 ]; then
 #  fixed-affine-layer name=lda input=Append(-1,0,1) affine-transform-file=$dir/configs/lda.mat
 
   # the first splicing is moved before the lda layer, so no splicing here
-  relu-layer name=tdnn1 input=Append(-1,0,1) dim=$dim
-  relu-layer name=tdnn2 input=Append(-1,0,1) dim=$dim
-  relu-layer name=tdnn3 input=Append(-1,0,1) dim=$dim
-  relu-layer name=tdnn4 input=Append(-3,0,3) dim=$dim
-  relu-layer name=tdnn5 input=Append(-3,0,3) dim=$dim
-  relu-layer name=tdnn6 input=Append(-3,0,3) dim=$dim
-  relu-layer name=tdnn7 input=Append(-3,0,3) dim=$dim
+  relu-layer name=tdnn1 input=Append(-1,0,1) dim=$dim max-change=$hid_max_change self-repair-scale=$self_repair
+  relu-layer name=tdnn2 input=Append(-1,0,1) dim=$dim max-change=$hid_max_change self-repair-scale=$self_repair
+  relu-layer name=tdnn3 input=Append(-1,0,1) dim=$dim max-change=$hid_max_change self-repair-scale=$self_repair
+  relu-layer name=tdnn4 input=Append(-3,0,3) dim=$dim max-change=$hid_max_change self-repair-scale=$self_repair
+  relu-layer name=tdnn5 input=Append(-3,0,3) dim=$dim max-change=$hid_max_change self-repair-scale=$self_repair
+  relu-layer name=tdnn6 input=Append(-3,0,3) dim=$dim max-change=$hid_max_change self-repair-scale=$self_repair
+  relu-layer name=tdnn7 input=Append(-3,0,3) dim=$dim max-change=$hid_max_change self-repair-scale=$self_repair
 
   ## adding the layers for chain branch
-  relu-layer name=prefinal-chain input=tdnn7 dim=$dim target-rms=$final_layer_normalize_target
-  output-layer name=output include-log-softmax=true dim=$num_targets max-change=1.5
+  relu-layer name=prefinal-chain input=tdnn7 dim=$dim target-rms=$final_layer_normalize_target self-repair-scale=$self_repair
+  output-layer name=output include-log-softmax=true dim=$num_targets max-change=$final_max_change
 
 EOF
   steps/nnet3/xconfig_to_configs.py --xconfig-file $dir/configs/network.xconfig --config-dir $dir/configs/
