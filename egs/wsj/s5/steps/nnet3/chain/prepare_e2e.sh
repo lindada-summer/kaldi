@@ -10,6 +10,7 @@
 cmd=run.pl
 nj=4
 stage=0
+shared_phones_opt="--shared-phones=$lang/phones/sets.int"
 # End configuration section.
 
 echo "$0 $@"  # Print the command line for logging
@@ -43,9 +44,9 @@ cp $lang/phones.txt $dir || exit 1;
 echo "$0: Initializing monophone system."
 
 [ ! -f $lang/phones/sets.int ] && exit 1;
-shared_phones_opt="--shared-phones=$lang/phones/sets.int"
 
 if [ $stage -le 0 ]; then
+  # feat dim does not matter here. Just set it to 10
   $cmd $dir/log/init_mono_mdl_tree.log \
     gmm-init-mono $shared_phones_opt $lang/topo 10 \
     $dir/0.mdl $dir/tree || exit 1;

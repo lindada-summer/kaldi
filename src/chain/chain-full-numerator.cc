@@ -151,7 +151,7 @@ void FullNumeratorComputation::AlphaGeneralFrame(int32 t) {
                                      num_graph_.MaxNumStates() * num_sequences_,
                                      num_sequences_);
   alpha_sum_vec.AddRowSumMat(1.0, alpha_mat, 0.0);
-  if (GetVerboseLevel() >= 3) {
+  /*if (GetVerboseLevel() >= 3) {
     std::cout << "Alpha(t=" << t << "): ";
     for (int i = 0; i < num_graph_.MaxNumStates(); i++)
       std::cout << alpha_mat(i, 0) << " ";
@@ -162,7 +162,7 @@ void FullNumeratorComputation::AlphaGeneralFrame(int32 t) {
     for (int i = 0; i < num_graph_.MaxNumStates(); i++)
       std::cout << alpha_sum_vec(i) << " ";
     std::cout << "\n";
-  }
+  }*/
 
 
   //std::cout << "alpha-sums for t = " << t << ": \n";
@@ -210,7 +210,7 @@ BaseFloat FullNumeratorComputation::ComputeTotLogLike() {
   tot_log_prob_ = tot_prob_;
   tot_log_prob_.ApplyLog();
   if (num_graph_.AreFirstTransitionsScaled())
-    tot_log_prob_.AddVec(-1.0, num_graph_.FirstTransitionOffsets());
+    tot_log_prob_.AddVec(1.0, num_graph_.FirstTransitionOffsets());
   BFloat tot_log_prob = tot_log_prob_.Sum();
 
   // We now have to add something for the arbitrary scaling factor.  [note: the
@@ -295,10 +295,10 @@ void FullNumeratorComputation::BetaLastFrame() {
   delete num_states_cpu;*/
 
   Vector<BFloat> inv_tot_prob(tot_prob_);
-  if (GetVerboseLevel() >= 2) {
-    std::cout << "tot_prob: ";
-    inv_tot_prob.Write(std::cout, false);
-  }
+  //if (GetVerboseLevel() >= 2) {
+  //  std::cout << "tot_prob: ";
+  //  inv_tot_prob.Write(std::cout, false);
+  //}
   inv_tot_prob.InvertElements();
   beta_mat.CopyRowsFromVec(inv_tot_prob);
   Matrix<BFloat> dd(num_graph_.FinalProbs());
@@ -306,12 +306,12 @@ void FullNumeratorComputation::BetaLastFrame() {
 //  const Matrix<BaseFloat> &x = num_graph_.FinalProbs();
 //  for (int i = 0; i < num_graph_.MaxNumStates(); i++)
 //    std::cout << x(i, 0) << " ";
-  if (GetVerboseLevel() >= 3) {
+  /*if (GetVerboseLevel() >= 3) {
     std::cout << "Beta(T): ";
     for (int i = 0; i < num_graph_.MaxNumStates(); i++)
       std::cout << beta_mat(i, 0) << " ";
     std::cout << "\n";
-  }
+    }*/
 }
 
 void FullNumeratorComputation::BetaGeneralFrame(int32 t) {
@@ -323,13 +323,13 @@ void FullNumeratorComputation::BetaGeneralFrame(int32 t) {
   // non-transposed output whenever we finish a chunk.
   int32 t_wrapped = t % static_cast<int32>(kMaxDerivTimeSteps);
   BFloat *this_alpha = alpha_.RowData(t),
-                  *next_beta = beta_.RowData((t + 1) % 2);
+                       *next_beta = beta_.RowData((t + 1) % 2);
   BFloat *this_beta = beta_.RowData(t % 2);
   const Int32Pair *forward_transitions = num_graph_.ForwardTransitions();
   const DenominatorGraphTransition *transitions = num_graph_.Transitions();
   // 'probs' is the matrix of pseudo-likelihoods for frame t.
   SubMatrix<BaseFloat> probs(exp_nnet_output_transposed_, 0, num_pdfs,
-                               t * num_sequences_, num_sequences_),
+                             t * num_sequences_, num_sequences_),
       log_prob_deriv(nnet_output_deriv_transposed_, 0, num_pdfs,
                      t_wrapped * num_sequences_, num_sequences_);
 
@@ -366,7 +366,7 @@ void FullNumeratorComputation::BetaGeneralFrame(int32 t) {
         log_prob_deriv_data[pdf_id * deriv_stride + s] += occupation_prob;
 
 
-        if (variable_factor - variable_factor != 0  || tot_variable_factor - tot_variable_factor != 0) {
+        //if (variable_factor - variable_factor != 0  || tot_variable_factor - tot_variable_factor != 0) {
           //KALDI_LOG << "t: " << t << ", seq: " << s << ", h: " << h << ", pdf_id: " << pdf_id
           //<< ", var-factor: " << variable_factor
           //<< ", tot-var-factor: " << tot_variable_factor
@@ -377,7 +377,7 @@ void FullNumeratorComputation::BetaGeneralFrame(int32 t) {
           //<< ", obs-prob: " << prob_data[pdf_id * prob_stride + s]
           //<< ", inv arbitrary_scale: " << inv_arbitrary_scale;
           //KALDI_ERR << "Beta failure.";
-        }
+        //}
 
 
       }
@@ -386,10 +386,10 @@ void FullNumeratorComputation::BetaGeneralFrame(int32 t) {
     }
   }
   SubMatrix<BFloat> beta_mat(this_beta,
-                                num_graph_.MaxNumStates(),
-                                num_sequences_,
-                                num_sequences_);
-  if (GetVerboseLevel() >= 3) {
+                             num_graph_.MaxNumStates(),
+                             num_sequences_,
+                             num_sequences_);
+  /*if (GetVerboseLevel() >= 3) {
     std::cout << "Beta(t=" << t << "): ";
     for (int i = 0; i < num_graph_.MaxNumStates(); i++)
       std::cout << beta_mat(i, 0) << " ";
@@ -400,11 +400,7 @@ void FullNumeratorComputation::BetaGeneralFrame(int32 t) {
     for (int i = 0; i < num_pdfs; i++)
       std::cout << log_prob_deriv_data[i * deriv_stride] << " ";
     std::cout << "\n";
-  }
-  //  Vector<BaseFloat> beta_sum_vec(num_sequences_);
-  //  beta_sum_vec.AddRowSumMat(1.0, beta_mat, 0.0);
-//  std::cout << "beta-sums for t = " << t+1 << ": \n";
-//  beta_sum_vec.Write(std::cout, false);
+    }*/
 }
 
 void FullNumeratorComputation::BetaGeneralFrameDebug(int32 t) {

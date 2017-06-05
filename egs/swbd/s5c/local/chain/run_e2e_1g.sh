@@ -1,5 +1,6 @@
 #!/bin/bash
 
+# TO TRY: full set (no nodup), LR, target-rms, no EqualAlign after the initial iterations--just ignore
 set -e
 
 # configs for 'chain'
@@ -8,14 +9,14 @@ stage=12
 train_stage=-10
 get_egs_stage=-10
 speed_perturb=true
-dir=exp/chain/e2e_1a  # Note: _sp will get added to this if $speed_perturb == true.
+dir=exp/chain/e2e_1g  # Note: _sp will get added to this if $speed_perturb == true.
 decode_iter=
 
 # training options
-num_epochs=5
+num_epochs=7
 initial_effective_lrate=0.001
 final_effective_lrate=0.0001
-max_param_change=2.0
+max_param_change=3.0
 final_layer_normalize_target=0.5
 num_jobs_initial=3
 num_jobs_final=16
@@ -24,6 +25,14 @@ remove_egs=false
 common_egs_dir=
 no_mmi_percent=101
 l2_regularize=0.00005
+dim=800
+frames_per_iter=2500000
+cmvn_opts="--norm-means=true --norm-vars=true"
+leaky_hmm_coeff=0.1
+hid_max_change=0.75
+final_max_change=1.5
+self_repair=1e-5
+shared_phones_opt=
 
 # End configuration section.
 echo "$0 $@"  # Print the command line for logging
@@ -42,7 +51,7 @@ fi
 
 train_set=train_nodup_seg_sp
 lang=data/lang_chain_2y
-treedir=exp/chain/e2e_tree_a
+treedir=exp/chain/e2e_tree_b
 
 #local/nnet3/run_e2e_common.sh --stage $stage \
 #  --speed-perturb $speed_perturb \
@@ -62,7 +71,7 @@ if [ $stage -le 10 ]; then
 fi
 
 if [ $stage -le 11 ]; then
-  steps/nnet3/chain/prepare_e2e.sh --nj 30 --cmd "$train_cmd" $train_set $lang $treedir
+  steps/nnet3/chain/prepare_e2e.sh --nj 30 --cmd "$train_cmd" --shared-phones-opt "$shared_phones_opt" data/$train_set $lang $treedir
 fi
 
 if [ $stage -le 12 ]; then
@@ -82,17 +91,17 @@ if [ $stage -le 12 ]; then
 #  fixed-affine-layer name=lda input=Append(-1,0,1) affine-transform-file=$dir/configs/lda.mat
 
   # the first splicing is moved before the lda layer, so no splicing here
-  relu-layer name=tdnn1 input=Append(-1,0,1) dim=625
-  relu-layer name=tdnn2 input=Append(-1,0,1) dim=625
-  relu-layer name=tdnn3 input=Append(-1,0,1) dim=625
-  relu-layer name=tdnn4 input=Append(-3,0,3) dim=625
-  relu-layer name=tdnn5 input=Append(-3,0,3) dim=625
-  relu-layer name=tdnn6 input=Append(-3,0,3) dim=625
-  relu-layer name=tdnn7 input=Append(-3,0,3) dim=625
+  relu-layer name=tdnn1 input=Append(-1,0,1) dim=$dim max-change=$hid_max_change self-repair-scale=$self_repair
+  relu-layer name=tdnn2 input=Append(-1,0,1) dim=$dim max-change=$hid_max_change self-repair-scale=$self_repair
+  relu-layer name=tdnn3 input=Append(-1,0,1) dim=$dim max-change=$hid_max_change self-repair-scale=$self_repair
+  relu-layer name=tdnn4 input=Append(-3,0,3) dim=$dim max-change=$hid_max_change self-repair-scale=$self_repair
+  relu-layer name=tdnn5 input=Append(-3,0,3) dim=$dim max-change=$hid_max_change self-repair-scale=$self_repair
+  relu-layer name=tdnn6 input=Append(-3,0,3) dim=$dim max-change=$hid_max_change self-repair-scale=$self_repair
+  relu-layer name=tdnn7 input=Append(-3,0,3) dim=$dim max-change=$hid_max_change self-repair-scale=$self_repair
 
   ## adding the layers for chain branch
-  relu-layer name=prefinal-chain input=tdnn7 dim=625 target-rms=$final_layer_normalize_target
-  output-layer name=output include-log-softmax=true dim=$num_targets max-change=1.5
+  relu-layer name=prefinal-chain input=tdnn7 dim=$dim target-rms=$final_layer_normalize_target self-repair-scale=$self_repair
+  output-layer name=output include-log-softmax=true dim=$num_targets max-change=$final_max_change
 
 EOF
   steps/nnet3/xconfig_to_configs.py --xconfig-file $dir/configs/network.xconfig --config-dir $dir/configs/
@@ -108,8 +117,8 @@ if [ $stage -le 13 ]; then
 
   steps/nnet3/chain/train_e2e.py --stage $train_stage \
     --cmd "$decode_cmd" \
-    --feat.cmvn-opts "--norm-means=false --norm-vars=false" \
-    --chain.leaky-hmm-coefficient 0.1 \
+    --feat.cmvn-opts "$cmvn_opts" \
+    --chain.leaky-hmm-coefficient $leaky_hmm_coeff \
     --chain.l2-regularize $l2_regularize \
     --chain.apply-deriv-weights false \
     --chain.lm-opts="--num-extra-lm-states=2000" \
@@ -119,7 +128,7 @@ if [ $stage -le 13 ]; then
     --trainer.options="--compiler.cache-capacity=512" \
     --trainer.no-mmi-percent $no_mmi_percent \
     --trainer.num-chunk-per-minibatch $minibatch_size \
-    --trainer.frames-per-iter 2500000 \
+    --trainer.frames-per-iter $frames_per_iter \
     --trainer.num-epochs $num_epochs \
     --trainer.optimization.num-jobs-initial $num_jobs_initial \
     --trainer.optimization.num-jobs-final $num_jobs_final \

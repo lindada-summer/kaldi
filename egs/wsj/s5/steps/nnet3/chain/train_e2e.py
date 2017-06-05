@@ -432,7 +432,7 @@ def train(args, run_opts, background_process_handler):
 
     disable_mmi = True
     for iter in range(num_iters):
-        if num_archives_processed*100 / num_archives_to_process > args.no_mmi_percent:
+        if disable_mmi and num_archives_processed*100 / num_archives_to_process > args.no_mmi_percent:
             disable_mmi = False
             logger.info("*** MMI was enabled at percentage: {} ***".format(
                 num_archives_processed * 100 / num_archives_to_process))

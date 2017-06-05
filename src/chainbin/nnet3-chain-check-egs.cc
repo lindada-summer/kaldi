@@ -50,7 +50,7 @@ int main(int argc, char *argv[]) {
       sup.label_dim = 10;
       sup.fst = num3;
       sup.e2e_fsts.push_back(num3);
-      NumeratorGraph numg(sup, true);
+      NumeratorGraph numg(sup, subtract);
       //num3g.PrintInfo(true);
       CuMatrix<BaseFloat>
             deriv1(3, 10, kSetZero),
