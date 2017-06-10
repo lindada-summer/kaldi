@@ -50,10 +50,10 @@ def create_phone_lm(dir, tree_dir, run_opts, lm_opts=None):
 
 def create_denominator_fst(dir, tree_dir, run_opts):
     if not os.path.exists('{dir}/0.trans_mdl'.format(dir=dir)):
-        common_lib.run_job(
+        common_lib.execute_command(
             """copy-transition-model {tree_dir}/final.mdl \
                     {dir}/0.trans_mdl""".format(dir=dir, tree_dir=tree_dir))
-    common_lib.run_job(
+    common_lib.execute_command(
         """{command} {dir}/log/make_den_fst.log \
                    chain-make-den-fst {dir}/tree {dir}/0.trans_mdl \
                    {dir}/phone_lm.fst \
@@ -256,8 +256,9 @@ def train_new_models(dir, iter, srand, num_jobs,
                         raw_model=raw_model_string,
                         egs_dir=egs_dir, archive_index=archive_index,
                         buf_size=shuffle_buffer_size,
-                        num_chunk_per_mb=num_chunk_per_minibatch_str),
-            require_zero_status=True,chain_train_opts=chain_train_opts)
+                        num_chunk_per_mb=num_chunk_per_minibatch_str,
+                        chain_train_opts=chain_train_opts),
+            require_zero_status=True)
 
         threads.append(thread)
 
