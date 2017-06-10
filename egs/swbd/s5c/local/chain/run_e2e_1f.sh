@@ -21,6 +21,42 @@
 # Final valid prob         -0.307
 
 
+# System                exp/chain/e2e_1f_maxch3:acwt=0.5  10xpost
+# WER on train_dev(tg)      28.43
+# WER on train_dev(fg)      26.93
+# WER on eval2000(tg)        29.2
+# WER on eval2000(fg)        27.6
+# Final train prob         -0.289
+# Final valid prob         -0.318
+
+# System                exp/chain/e2e_1f_maxch3: acwt=1.2 10xpost
+# WER on train_dev(tg)      28.59
+# WER on train_dev(fg)      27.27
+# WER on eval2000(tg)        29.2
+# WER on eval2000(fg)        27.8
+# Final train prob         -0.289
+# Final valid prob         -0.318
+
+
+# System                exp/chain/e2e_1f_maxch3: acwt=0.75
+# WER on train_dev(tg)      28.44
+# WER on train_dev(fg)      26.93
+# WER on eval2000(tg)        34.9
+# WER on eval2000(fg)        27.5
+# Final train prob         -0.289
+# Final valid prob         -0.318
+
+# local/chain/compare_wer_general.sh exp/chain/e2e_1f_maxch3: acwt:0.9
+# System                exp/chain/e2e_1f_maxch3/
+# WER on train_dev(tg)      28.51
+# WER on train_dev(fg)      27.05
+# WER on eval2000(tg)        29.1
+# WER on eval2000(fg)        27.6
+# Final train prob         -0.289
+# Final valid prob         -0.318
+
+
+
 # TO TRY: full set (no nodup)
 set -e
 
@@ -53,6 +89,13 @@ leaky_hmm_coeff=0.1
 hid_max_change=0.75
 final_max_change=1.5
 self_repair=1e-5
+acwt=1.2
+post_acwt=12.0
+num_scale_opts="--transition-scale=0.0 --self-loop-scale=0.0"
+shared_phones_opt=
+equal_align_iters=1000
+den_use_initials=true
+den_use_finals=false
 
 # End configuration section.
 echo "$0 $@"  # Print the command line for logging
@@ -91,7 +134,10 @@ if [ $stage -le 10 ]; then
 fi
 
 if [ $stage -le 11 ]; then
-  steps/nnet3/chain/prepare_e2e.sh --nj 30 --cmd "$train_cmd" $train_set $lang $treedir
+  steps/nnet3/chain/prepare_e2e.sh --nj 30 --cmd "$train_cmd" \
+                                   --scale-opts "$num_scale_opts" \
+                                   --shared-phones-opt "$shared_phones_opt" \
+                                   data/$train_set $lang $treedir
 fi
 
 if [ $stage -le 12 ]; then
@@ -145,8 +191,9 @@ if [ $stage -le 13 ]; then
     --egs.dir "$common_egs_dir" \
     --egs.stage $get_egs_stage \
     --egs.opts "--normalize-egs false" \
-    --trainer.options="--compiler.cache-capacity=512" \
+    --trainer.options="--compiler.cache-capacity=512 --den-use-initials=$den_use_initials --den-use-finals=$den_use_finals" \
     --trainer.no-mmi-percent $no_mmi_percent \
+    --trainer.equal-align-iters $equal_align_iters \
     --trainer.num-chunk-per-minibatch $minibatch_size \
     --trainer.frames-per-iter $frames_per_iter \
     --trainer.num-epochs $num_epochs \
@@ -167,7 +214,7 @@ if [ $stage -le 14 ]; then
   # Note: it might appear that this $lang directory is mismatched, and it is as
   # far as the 'topo' is concerned, but this script doesn't read the 'topo' from
   # the lang directory.
-  utils/mkgraph.sh --self-loop-scale 0.1 data/lang_sw1_tg $dir $dir/graph_sw1_tg
+  utils/mkgraph.sh --self-loop-scale 1.0 data/lang_sw1_tg $dir $dir/graph_sw1_tg
 fi
 
 #          --online-ivector-dir exp/nnet3/ivectors_${decode_set} \
@@ -181,7 +228,7 @@ if [ $stage -le 15 ]; then
   fi
   for decode_set in train_dev eval2000; do
       (
-      steps/nnet3/decode.sh --acwt 1.2 --post-decode-acwt 12.0 \
+      steps/nnet3/decode.sh --acwt $acwt --post-decode-acwt $post_acwt \
           --nj 50 --cmd "$decode_cmd" $iter_opts \
           $graph_dir data/${decode_set}_hires $dir/decode_${decode_set}${decode_iter:+_$decode_iter}_${decode_suff} || exit 1;
       if $has_fisher; then

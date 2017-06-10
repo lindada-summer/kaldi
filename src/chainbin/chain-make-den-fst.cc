@@ -43,6 +43,20 @@ int main(int argc, char *argv[]) {
 
     po.Read(argc, argv);
 
+    if (po.NumArgs() == 3) {
+      std::string hclg_rxfilename = po.GetArg(1),
+        transition_model_rxfilename = po.GetArg(2),
+        den_fst_wxfilename = po.GetArg(3);
+      fst::StdVectorFst hclg;
+      ReadFstKaldi(hclg_rxfilename, &hclg);
+      TransitionModel trans_model;
+      ReadKaldiObject(transition_model_rxfilename, &trans_model);
+      fst::Project(&hclg, fst::PROJECT_INPUT);
+      MapFstToPdfIdsPlusOne(trans_model, &hclg);
+      WriteFstKaldi(hclg, den_fst_wxfilename);
+      exit(0);
+    }
+
     if (po.NumArgs() != 5) {
       po.PrintUsage();
       exit(1);

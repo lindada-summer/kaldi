@@ -31,6 +31,8 @@ DenominatorGraph::DenominatorGraph(const fst::StdVectorFst &fst,
     num_pdfs_(num_pdfs) {
   SetTransitions(fst, num_pdfs);
   SetInitialProbs(fst);
+  initial_state_ = fst.Start();
+  SetFinalProbs(fst);
 }
 
 const Int32Pair* DenominatorGraph::BackwardTransitions() const {
@@ -47,6 +49,10 @@ const DenominatorGraphTransition* DenominatorGraph::Transitions() const {
 
 const CuVector<BaseFloat>& DenominatorGraph::InitialProbs() const {
   return initial_probs_;
+}
+
+const CuVector<BaseFloat>& DenominatorGraph::FinalProbs() const {
+  return final_probs_;
 }
 
 void DenominatorGraph::SetTransitions(const fst::StdVectorFst &fst,
@@ -140,6 +146,17 @@ void DenominatorGraph::SetInitialProbs(const fst::StdVectorFst &fst) {
   Vector<BaseFloat> avg_prob_float(avg_prob);
   initial_probs_ = avg_prob_float;
 }
+
+void DenominatorGraph::SetFinalProbs(const fst::StdVectorFst &fst) {
+  int32 num_states = fst.NumStates();
+  Vector<BaseFloat> probs(num_states);
+  for (int32 s = 0; s < num_states; s++) {
+    float fin_prob = exp(-fst.Final(s).Value());
+    probs(s) = fin_prob;
+  }
+  final_probs_ = probs;
+}
+
 
 void DenominatorGraph::GetNormalizationFst(const fst::StdVectorFst &ifst,
                                            fst::StdVectorFst *ofst) {

@@ -59,6 +59,7 @@ class DenominatorGraph {
   // the number of PDFs (the labels on the transitions are numbered from 0 to
   // NumPdfs() - 1).
   int32 NumPdfs() const { return num_pdfs_; }
+  int32 InitialState() const { return initial_state_; }
 
   DenominatorGraph();
 
@@ -87,6 +88,7 @@ class DenominatorGraph {
   // posteriors over those time-steps.  The exact values won't be very critical.
   // Note: we renormalize each HMM-state to sum to one before doing this.
   const CuVector<BaseFloat> &InitialProbs() const;
+  const CuVector<BaseFloat> &FinalProbs() const;
 
   // This function outputs a modifified version of the FST that was used to
   // build this object, that has an initial-state with epsilon transitions to
@@ -117,6 +119,7 @@ class DenominatorGraph {
   // ourselves to only those pdf-ids that were allowed in the numerator
   // sequence.
   void SetInitialProbs(const fst::StdVectorFst &fst);
+  void SetFinalProbs(const fst::StdVectorFst &fst);
 
   // forward_transitions_ is an array, indexed by hmm-state index,
   // of start and end indexes into the transition_ array, which
@@ -138,6 +141,8 @@ class DenominatorGraph {
   CuVector<BaseFloat> initial_probs_;
 
   int32 num_pdfs_;
+  int32 initial_state_;
+  CuVector<BaseFloat> final_probs_;
 };
 
 

@@ -47,7 +47,7 @@ bool TryEqualAlign(const Supervision &supervision, BaseFloat *objf,
   for (int32 s = 0; s < B; s++) {
     VectorFst<StdArc> path;
     if (EqualAlign(supervision.e2e_fsts[s], T, rand_seed, &path) ) {
-      std::vector<int32> aligned_seq;
+      std::vector<int32> aligned_seq; // the labels are PdfIds + 1
       StdArc::Weight w;
       GetLinearSymbolSequence(path, &aligned_seq, (std::vector<int32> *)NULL, &w);
       KALDI_ASSERT(aligned_seq.size() == T);
@@ -117,16 +117,19 @@ void ComputeChainObjfAndDeriv(const ChainTrainingOptions &opts,
       num_ok = fnum.Backward(supervision.weight, nnet_output_deriv);
     //if (!ok)
     //  KALDI_ERR << "full supervision computation failed";
-    if (!num_ok) {
+    if (!num_ok && opts.equal_align) {
       num_ok = TryEqualAlign(supervision, &num_logprob_weighted, nnet_output_deriv);
       KALDI_LOG << "######### EqualAlign logprob: " << num_logprob_weighted << "     ok:" << num_ok;
+    } else if (!num_ok && !opts.equal_align) {
+      KALDI_LOG << "######### Not doing equal-align because it is disabled.    ok:" << num_ok;
     }
+
   }
 
 
   bool ok = true;
   BaseFloat den_logprob = 0.0;
-  if (!opts.disable_mmi) {
+  if (!opts.disable_mmi && num_ok) {
     DenominatorComputation denominator(opts, den_graph,
                                        supervision.num_sequences,
                                        nnet_output);

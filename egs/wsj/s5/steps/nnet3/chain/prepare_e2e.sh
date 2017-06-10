@@ -11,6 +11,9 @@ cmd=run.pl
 nj=4
 stage=0
 shared_phones_opt="--shared-phones=$lang/phones/sets.int"
+
+# by default we get these from den graph by composing with normalization fst
+scale_opts="--transition-scale=0.0 --self-loop-scale=0.0"
 # End configuration section.
 
 echo "$0 $@"  # Print the command line for logging
@@ -35,6 +38,7 @@ oov_sym=`cat $lang/oov.int` || exit 1;
 
 mkdir -p $dir/log
 
+echo $scale_opts > dir/scale_opts  # just for easier reference (it is in the logs too)
 echo $nj > $dir/num_jobs
 sdata=$data/split$nj;
 [[ -d $sdata && $data/feats.scp -ot $sdata ]] || split_data.sh $data $nj || exit 1;
@@ -56,7 +60,8 @@ fi
 if [ $stage -le 1 ]; then
   echo "$0: Compiling training graphs"
   $cmd JOB=1:$nj $dir/log/compile_graphs.JOB.log \
-    compile-train-graphs --read-disambig-syms=$lang/phones/disambig.int $dir/tree $dir/0.mdl $lang/L.fst \
+    compile-train-graphs $scale_opts --read-disambig-syms=$lang/phones/disambig.int \
+    $dir/tree $dir/0.mdl $lang/L.fst \
     "ark:sym2int.pl --map-oov $oov_sym -f 2- $lang/words.txt < $sdata/JOB/text|" \
     "ark,scp:$dir/fst.JOB.ark,$dir/fst.JOB.scp" || exit 1;
 fi

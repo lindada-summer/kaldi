@@ -73,7 +73,12 @@ void DenominatorComputation::AlphaFirstFrame() {
   // TODO (possible): It would be more efficient here if we implemented a
   // CopyColsFromVec function in class CuMatrix.
   alpha_mat.SetZero();
-  alpha_mat.AddVecToCols(1.0, den_graph_.InitialProbs(), 0.0);
+  if (opts_.den_use_initials) {
+    alpha_mat.AddVecToCols(1.0, den_graph_.InitialProbs(), 0.0);
+  } else {
+    alpha_mat.Row(den_graph_.InitialState()).Set(1.0); // only the initial state
+                                                       // is the starting point
+  }
 }
 
 
@@ -220,6 +225,9 @@ BaseFloat DenominatorComputation::ComputeTotLogLike() {
       num_sequences_,
       num_sequences_);
 
+  if (opts_.den_use_finals)
+    last_alpha_dash.MulRowsVec(den_graph_.FinalProbs());  // the name is confusing but it scales each
+                                   // column vector of the mat by final probs
   tot_prob_.AddRowSumMat(1.0, last_alpha_dash, 0.0);
   // we should probably add an ApplyLog() function that takes a vector argument.
   tot_log_prob_ = tot_prob_;
@@ -298,6 +306,8 @@ void DenominatorComputation::BetaDashLastFrame() {
   inv_tot_prob.InvertElements();
   // the beta values at the end of the file only vary with the sequence-index,
   // not with the HMM-index.  We treat all states as having a final-prob of one.
+  if (opts_.den_use_finals)
+    inv_tot_prob.MulElements(den_graph_.FinalProbs());
   beta_dash_mat.CopyRowsFromVec(inv_tot_prob);
 }
 

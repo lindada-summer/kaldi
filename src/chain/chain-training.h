@@ -61,9 +61,13 @@ struct ChainTrainingOptions {
   // should have a softmax as its final nonlinearity.
   BaseFloat xent_regularize;
   bool disable_mmi;
+  bool equal_align;
+  bool den_use_initials, den_use_finals;
 
   ChainTrainingOptions(): l2_regularize(0.0), leaky_hmm_coefficient(1.0e-05),
-                          xent_regularize(0.0), disable_mmi(false) { }
+                          xent_regularize(0.0), disable_mmi(false),
+                          equal_align(true), den_use_initials (true),
+                          den_use_finals (false) { }
 
   void Register(OptionsItf *opts) {
     opts->Register("l2-regularize", &l2_regularize, "l2 regularization "
@@ -80,6 +84,10 @@ struct ChainTrainingOptions {
                    "named 'output-xent', which should have a softmax as "
                    "its final nonlinearity.");
     opts->Register("disable-mmi", &disable_mmi, "Use only the num graph");
+    opts->Register("equal-align", &equal_align, "Do equal align if necessary or not?");
+    opts->Register("den-use-initials", &den_use_initials, "Use initial state probs in den "
+                   "(all states are initial with some probability)");
+    opts->Register("den-use-finals", &den_use_finals, "Use final state probs in den");
   }
 };
 
