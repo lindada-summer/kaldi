@@ -493,6 +493,7 @@ def train(args, run_opts):
                   ' --disable-mmi={} --equal-align={}'.format(
                                                      disable_mmi, equal_align)))
 
+
             if args.cleanup:
                 # do a clean up everythin but the last 2 models, under certain
                 # conditions

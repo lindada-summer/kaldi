@@ -1,60 +1,5 @@
 #!/bin/bash
-# 1f uses cmvn (both). 1f_noVar only normalizes mean.
-# local/chain/compare_wer_general.sh e2e_1f e2e_1f_noVar e2e_1f_noL2_6ep
-# System                   e2e_1f e2e_1f_noVar e2e_1f_noL2_6ep
-# WER on train_dev(tg)      29.85     30.49     30.04
-# WER on train_dev(fg)      28.48     29.06     28.70
-# WER on eval2000(tg)        30.6      31.4      30.8
-# WER on eval2000(fg)        29.2      29.8      29.4
-# Final train prob         -0.318    -0.321    -0.283
-# Final valid prob         -0.339    -0.348    -0.301
-# Final train prob (xent)         0.000     0.000     0.000
-# Final valid prob (xent)        0.0000    0.0000    0.0000
-
-# local/chain/compare_wer_general.sh e2e_1f_l2n1fifth
-# System                e2e_1f_l2n1fifth
-# WER on train_dev(tg)      29.56
-# WER on train_dev(fg)      28.24
-# WER on eval2000(tg)        30.8
-# WER on eval2000(fg)        29.2
-# Final train prob         -0.293
-# Final valid prob         -0.307
-
-
-# System                exp/chain/e2e_1f_maxch3:acwt=0.5  10xpost
-# WER on train_dev(tg)      28.43
-# WER on train_dev(fg)      26.93
-# WER on eval2000(tg)        29.2
-# WER on eval2000(fg)        27.6
-# Final train prob         -0.289
-# Final valid prob         -0.318
-
-# System                exp/chain/e2e_1f_maxch3: acwt=1.2 10xpost
-# WER on train_dev(tg)      28.59
-# WER on train_dev(fg)      27.27
-# WER on eval2000(tg)        29.2
-# WER on eval2000(fg)        27.8
-# Final train prob         -0.289
-# Final valid prob         -0.318
-
-
-# System                exp/chain/e2e_1f_maxch3: acwt=0.75
-# WER on train_dev(tg)      28.44
-# WER on train_dev(fg)      26.93
-# WER on eval2000(tg)        34.9
-# WER on eval2000(fg)        27.5
-# Final train prob         -0.289
-# Final valid prob         -0.318
-
-# local/chain/compare_wer_general.sh exp/chain/e2e_1f_maxch3: acwt:0.9
-# System                exp/chain/e2e_1f_maxch3/
-# WER on train_dev(tg)      28.51
-# WER on train_dev(fg)      27.05
-# WER on eval2000(tg)        29.1
-# WER on eval2000(fg)        27.6
-# Final train prob         -0.289
-# Final valid prob         -0.318
-
+# 1h uses trans-prob=1.0 and self-loop=1.0 -- and a shared phones tree (unlike 1e)
 
 
 # TO TRY: full set (no nodup)
@@ -62,11 +7,11 @@ set -e
 
 # configs for 'chain'
 affix=
-stage=12
+stage=11
 train_stage=-10
 get_egs_stage=-10
 speed_perturb=true
-dir=exp/chain/e2e_1f  # Note: _sp will get added to this if $speed_perturb == true.
+dir=exp/chain/e2e_1h  # Note: _sp will get added to this if $speed_perturb == true.
 decode_iter=
 
 # training options
@@ -79,7 +24,7 @@ num_jobs_initial=3
 num_jobs_final=16
 minibatch_size=150=128,64/300=128,64,32/600=64,32,16/1200=16,8
 remove_egs=false
-common_egs_dir=exp/chain/e2e_1f/egs
+common_egs_dir=
 no_mmi_percent=101
 l2_regularize=0.00005
 dim=800
@@ -89,17 +34,22 @@ leaky_hmm_coeff=0.1
 hid_max_change=0.75
 final_max_change=1.5
 self_repair=1e-5
-acwt=1.0
-post_acwt=10.0
-num_scale_opts="--transition-scale=0.0 --self-loop-scale=0.0"
+acwt=0.9
+post_acwt=9.0
+num_scale_opts="--transition-scale=1.0 --self-loop-scale=1.0"
 equal_align_iters=1000
 den_use_initials=true
 den_use_finals=false
-slc=1.0
+slc=0.0
 shared_phones=true
+train_set=train_nodup_seg_sp
+topo_affix=1a
+tree_affix=_c
+topo_cmd="steps/nnet3/chain/gen_topo.py --self-loop-prob 0.75"
 
 # End configuration section.
 echo "$0 $@"  # Print the command line for logging
+echo "$0 $@"  >> all_runs.log
 
 . ./cmd.sh
 . ./path.sh
@@ -113,9 +63,9 @@ where "nvcc" is installed.
 EOF
 fi
 
-train_set=train_nodup_seg_sp
-lang=data/lang_chain_2y
-treedir=exp/chain/e2e_tree_a
+lang=data/lang_e2e_${topo_affix}
+treedir=exp/chain/e2e_tree${tree_affix}_topo${topo_affix}
+
 
 #local/nnet3/run_e2e_common.sh --stage $stage \
 #  --speed-perturb $speed_perturb \
@@ -131,7 +81,7 @@ if [ $stage -le 10 ]; then
   nonsilphonelist=$(cat $lang/phones/nonsilence.csl) || exit 1;
   # Use our special topology... note that later on may have to tune this
   # topology.
-  steps/nnet3/chain/gen_topo.py $nonsilphonelist $silphonelist >$lang/topo
+  $topo_cmd $nonsilphonelist $silphonelist >$lang/topo
 fi
 
 if [ $stage -le 11 ]; then
@@ -204,12 +154,13 @@ if [ $stage -le 13 ]; then
     --trainer.optimization.initial-effective-lrate $initial_effective_lrate \
     --trainer.optimization.final-effective-lrate $final_effective_lrate \
     --trainer.max-param-change $max_param_change \
-     --cleanup.preserve-model-interval 10 \
     --cleanup.remove-egs $remove_egs \
+    --cleanup.preserve-model-interval 10 \
     --feat-dir data/${train_set} \
     --tree-dir $treedir \
     --dir $dir  || exit 1;
 fi
+
 
 if [ $stage -le 14 ]; then
   rm -rf $dir/graph_sw1_tg
@@ -246,4 +197,5 @@ if [ $stage -le 15 ]; then
   done
 fi
 wait;
+~/bin/swbd.sh $dir
 exit 0;

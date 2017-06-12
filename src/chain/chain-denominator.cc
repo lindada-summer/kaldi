@@ -306,9 +306,9 @@ void DenominatorComputation::BetaDashLastFrame() {
   inv_tot_prob.InvertElements();
   // the beta values at the end of the file only vary with the sequence-index,
   // not with the HMM-index.  We treat all states as having a final-prob of one.
-  if (opts_.den_use_finals)
-    inv_tot_prob.MulElements(den_graph_.FinalProbs());
   beta_dash_mat.CopyRowsFromVec(inv_tot_prob);
+  if (opts_.den_use_finals)
+    beta_dash_mat.MulRowsVec(den_graph_.FinalProbs());  // the name is confusing but it scales each
 }
 
 void DenominatorComputation::BetaDashGeneralFrame(int32 t) {

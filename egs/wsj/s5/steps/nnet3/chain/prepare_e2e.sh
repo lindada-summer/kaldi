@@ -10,7 +10,7 @@
 cmd=run.pl
 nj=4
 stage=0
-shared_phones_opt="--shared-phones=$lang/phones/sets.int"
+shared_phones=true
 
 # by default we get these from den graph by composing with normalization fst
 scale_opts="--transition-scale=0.0 --self-loop-scale=0.0"
@@ -38,7 +38,7 @@ oov_sym=`cat $lang/oov.int` || exit 1;
 
 mkdir -p $dir/log
 
-echo $scale_opts > dir/scale_opts  # just for easier reference (it is in the logs too)
+echo $scale_opts > $dir/scale_opts  # just for easier reference (it is in the logs too)
 echo $nj > $dir/num_jobs
 sdata=$data/split$nj;
 [[ -d $sdata && $data/feats.scp -ot $sdata ]] || split_data.sh $data $nj || exit 1;
@@ -48,6 +48,10 @@ cp $lang/phones.txt $dir || exit 1;
 echo "$0: Initializing monophone system."
 
 [ ! -f $lang/phones/sets.int ] && exit 1;
+
+if $shared_phones; then
+  shared_phones_opt="--shared-phones=$lang/phones/sets.int"
+fi
 
 if [ $stage -le 0 ]; then
   # feat dim does not matter here. Just set it to 10
