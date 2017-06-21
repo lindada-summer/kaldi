@@ -44,6 +44,7 @@ online_ivector_dir=  # can be used if we are including speaker information as iV
 cmvn_opts=  # can be used for specifying CMVN options, if feature type is not lda (if lda,
             # it doesn't make sense to use different options than were used as input to the
             # LDA transform).  This is used to turn off CMVN in the online-nnet experiments.
+add_deltas=false
 
 echo "$0 $@"  # Print the command line for logging
 
@@ -178,6 +179,12 @@ if [ -f $dir/trans.scp ]; then
   feats="$feats transform-feats --utt2spk=ark:$sdata/JOB/utt2spk scp:$dir/trans.scp ark:- ark:- |"
   valid_feats="$valid_feats transform-feats --utt2spk=ark:$data/utt2spk scp:$dir/trans.scp ark:- ark:- |"
   train_subset_feats="$train_subset_feats transform-feats --utt2spk=ark:$data/utt2spk scp:$dir/trans.scp ark:- ark:- |"
+fi
+
+if $add_deltas; then
+  feats="$feats add-deltas ark:- ark:- |"
+  valid_feats="$valid_feats add-deltas ark:- ark:- |"
+  train_subset_feats="$train_subset_feats add-deltas ark:- ark:- |"
 fi
 
 # TODO(hhadian): genereate ivectors in prepare_e2e.sh or ...

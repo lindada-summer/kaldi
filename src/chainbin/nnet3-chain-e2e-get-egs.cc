@@ -52,19 +52,25 @@ static bool ProcessFile(const ExampleGenerationConfig &opts,
 // TODO(hhadian)
 // check feats.NumRows() and if it is not equal to an allowed num-frames
 // delete a few frames from beginning or end
-  bool found = false;
+  int32 min_diff = 100;
+  int32 len_extend_context = 0;
   for (int32 i = 0; i < opts.num_frames.size(); i++)
-    if (feats.NumRows() == opts.num_frames[i]) {
-      found = true;
-      break;
-    }
-  if (!found)
-    KALDI_WARN << "No exact match found for the length of utt " << utt_id
-               << " which has length: " << feats.NumRows();
+    if (abs(feats.NumRows() - opts.num_frames[i]) < abs(min_diff))
+      min_diff = feats.NumRows() - opts.num_frames[i];
 
+  if (min_diff != 0) {
+    KALDI_WARN << "No exact match found for the length of utt " << utt_id
+               << " which has length: " << feats.NumRows()
+               << " closest allowed length is off by " << min_diff
+               << " frames. Will try to fix it..";
+    if (abs(min_diff) < 5)  // we assume possibly up to 5 frames from the end can be safely deleted
+      len_extend_context = -min_diff;  // let the code below do it
+    else  // unexpected
+      KALDI_ERR << "Too much length difference for utterance " << utt_id;
+  }
   int32 num_input_frames = feats.NumRows(),
         factor = opts.frame_subsampling_factor,
-        num_frames_subsampled = (num_input_frames + factor - 1) / factor,
+        num_frames_subsampled = (num_input_frames + len_extend_context + factor - 1) / factor,
         num_output_frames = num_frames_subsampled;
 
 
@@ -102,7 +108,7 @@ static bool ProcessFile(const ExampleGenerationConfig &opts,
 
 
   int32 tot_input_frames = left_context + num_input_frames +
-                           right_context;
+                           right_context + len_extend_context;
 
   Matrix<BaseFloat> input_frames(tot_input_frames, feats.NumCols(),
                                  kUndefined);
@@ -256,7 +262,6 @@ int main(int argc, char *argv[]) {
       if (!feat_reader.HasKey(key)) {
         num_err++;
         KALDI_WARN << "No features for utterance " << key;
-        //break;
       } else {
         const Matrix<BaseFloat> &features = feat_reader.Value(key);
         VectorFst<StdArc> fst(fst_reader.Value());

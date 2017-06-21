@@ -12,6 +12,7 @@ import argparse
 import os
 import sys
 import copy
+import math
 
 parser = argparse.ArgumentParser(description="""This script ...""")
 parser.add_argument('factor', type=float, default=12,
@@ -19,6 +20,9 @@ parser.add_argument('factor', type=float, default=12,
 parser.add_argument('srcdir', type=str,
                     help='path to source data dir')
 parser.add_argument('dir', type=str, help='output dir')
+parser.add_argument('--range-factor', type=float, default=0.05,
+                    help="""Percentage of durations not covered from each side of
+                    duration histogram.""")
 
 args = parser.parse_args()
 
@@ -117,10 +121,36 @@ def generate_kaldi_data_files(utterances, outdir):
 if not os.path.exists(args.dir):
   os.makedirs(args.dir)
 
-# 0. compute and write allowed lengths
+# 0. load src dir
+utts = read_kaldi_datadir(args.srcdir)
+
 factor = 1.0 + float(args.factor)/100
-start_dur = 0.88
-end_dur = 19.00
+# 1a. find start-dur and end-dur
+## echo "Durs = [" >durs.m && cut -d' ' -f2 data/train_nodup_seg/utt2dur | tr '\n' ',' >>durs.m && echo " ];" >>durs.m
+durs = []
+for u in utts:
+  durs += [u.dur]
+durs.sort()
+to_ignore_dur = 0
+tot_dur = sum(durs)
+for d in durs:
+  to_ignore_dur += d
+  if to_ignore_dur * 100.0 / tot_dur > args.range_factor:
+    start_dur = d
+    break
+to_ignore_dur = 0
+for d in reversed(durs):
+  to_ignore_dur += d
+  if to_ignore_dur * 100.0 / tot_dur > args.range_factor:
+    end_dur = d
+    break
+print("Durations in the range [{},{}] will be covered. Coverage rate: {}%".format(start_dur, end_dur, 100.0-args.range_factor*2))
+print("There will be {} unique allowed lengths for the utterances.".format(int(math.log(end_dur/start_dur)/math.log(factor))))
+#sys.exit(0)
+
+# 1b. compute and write allowed lengths
+#start_dur = 0.88
+#end_dur = 19.00
 durs = []
 d = start_dur
 f = open(os.path.join(args.dir, 'allowed_durs.txt'), 'wb')
@@ -144,9 +174,6 @@ while d < end_dur:
 f.close()
 f2.close()
 
-# 1. load src dir
-utts = read_kaldi_datadir(args.srcdir)
-
 # 2. perturb to allowed durs
 # sox -t wav seg1.wav -t wav long95.wav speed 0.873684211
 perturbed_utts = []
@@ -161,30 +188,46 @@ for u in utts:
     prev_d = d
   # i determines the closest allowed durs
 
-  u2 = copy.deepcopy(u)
-  prev_i = i - 1 if i > 0 else 0
-  allowed_dur = durs[prev_i]
-  speed = u.dur / allowed_dur
-  if max(speed, 1.0/speed) > 1.12:
-#    print('rejected: {}    --> dur was {} speed was {}'.format(u.id, u.dur, speed))
-    continue
-  u.id = 'spv1-' + u.id
-  u.speaker = 'spv1-' + u.speaker
-  u.wavefile = '{} sox -t wav - -t wav - speed {} | '.format(u.wavefile, speed)
-  u.dur = allowed_dur
-  perturbed_utts += [u]
-  if i == 0 or i == len(durs) - 1:
-    continue
-  allowed_dur2 = durs[i]
-  speed = u2.dur / allowed_dur2
-  if max(speed, 1.0/speed) > 1.12:
-#    print('no v2 for: {}    --> dur was {} speed was {}'.format(u.id, u2.dur, speed))
-    continue
-  u2.id = 'spv2-' + u2.id
-  u2.speaker = 'spv2-' + u2.speaker
-  u2.wavefile = '{} sox -t wav - -t wav - speed {} | '.format(u2.wavefile, speed)
-  u2.dur = allowed_dur2
-  perturbed_utts += [u2]
+  if i > 0:
+    allowed_dur = durs[i - 1]   # this is smaller than u.dur
+    speed = u.dur / allowed_dur
+    if max(speed, 1.0/speed) > factor:
+      #print('rejected: {}    --> dur was {} speed was {}'.format(u.id, u.dur, speed))
+      continue
+    u1 = copy.deepcopy(u)
+    u1.id = 'pv1-' + u.id
+    u1.speaker = 'pv1-' + u.speaker
+    u1.wavefile = '{} sox -t wav - -t wav - speed {} | '.format(u.wavefile, speed)
+    u1.dur = allowed_dur
+    perturbed_utts += [u1]
+
+
+  if i < len(durs) - 1:
+    allowed_dur2 = durs[i]  # this is bigger than u.dur
+    speed = u.dur / allowed_dur2
+    if max(speed, 1.0/speed) > factor:
+      #print('no v2/v3 for: {}    --> dur was {} speed was {}'.format(u.id, u.dur, speed))
+      continue
+
+    ## Add two versions for the second allowed_length
+    ## one version is by using speed modification using sox
+    ## the other is by extending by silence
+    u2 = copy.deepcopy(u)
+    u2.id = 'pv2-' + u.id
+    u2.speaker = 'pv2-' + u.speaker
+    u2.wavefile = '{} sox -t wav - -t wav - speed {} | '.format(u.wavefile, speed)
+    u2.dur = allowed_dur2
+    perturbed_utts += [u2]
+
+    delta = allowed_dur2 - u.dur
+    if delta <= 1e-4:
+      continue
+    u3 = copy.deepcopy(u)
+    u3.id = 'pv3-' + u.id
+    u3.speaker = 'pv3-' + u.speaker
+    u3.wavefile = '{} extend-wav-with-silence --extra-silence-length={} - - | '.format(u.wavefile, delta)
+    u3.dur = allowed_dur2
+    perturbed_utts += [u3]
 
 # 3. write to our dir
 generate_kaldi_data_files(perturbed_utts, args.dir)

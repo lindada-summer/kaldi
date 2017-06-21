@@ -278,6 +278,8 @@ def train(args, run_opts):
 
     num_jobs = common_lib.get_number_of_jobs(args.tree_dir)
     feat_dim = common_lib.get_feat_dim(args.feat_dir)
+    if args.egs_opts.find('add-deltas true') != -1:
+      feat_dim *= 3
     ivector_dim = common_lib.get_ivector_dim(args.online_ivector_dir)
     ivector_id = common_lib.get_ivector_extractor_id(args.online_ivector_dir)
 

@@ -11,6 +11,7 @@ cmd=run.pl
 nj=4
 stage=0
 shared_phones=true
+uniform_lexicon=false
 
 # by default we get these from den graph by composing with normalization fst
 scale_opts="--transition-scale=0.0 --self-loop-scale=0.0"
@@ -61,11 +62,17 @@ if [ $stage -le 0 ]; then
   copy-transition-model $dir/0.mdl $dir/0.trans_mdl
 fi
 
+lex=$lang/L.fst
+if $uniform_lexicon; then
+  fstprint $lang/L.fst | awk 'NF==1||NF==2{print $1} NF==4||NF==5{print $1,$2,$3,$4}' | fstcompile >$lang/L_uniform.fst
+  lex=$lang/L_uniform.fst
+fi
+
 if [ $stage -le 1 ]; then
   echo "$0: Compiling training graphs"
   $cmd JOB=1:$nj $dir/log/compile_graphs.JOB.log \
     compile-train-graphs $scale_opts --read-disambig-syms=$lang/phones/disambig.int \
-    $dir/tree $dir/0.mdl $lang/L.fst \
+    $dir/tree $dir/0.mdl $lex \
     "ark:sym2int.pl --map-oov $oov_sym -f 2- $lang/words.txt < $sdata/JOB/text|" \
     "ark,scp:$dir/fst.JOB.ark,$dir/fst.JOB.scp" || exit 1;
 fi
