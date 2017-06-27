@@ -112,8 +112,9 @@ frames_per_eg=$(cat $data/allowed_lengths.txt | tr '\n' , | sed 's/,$//')
 [ ! -f "$data/utt2len" ] && feat-to-len scp:$data/feats.scp ark,t:$data/utt2len
 # TODO(222 --> most frequent len)
 cat $data/utt2len | \
-  awk -v mf_len=222 '{if ($2 == mf_len) print $1}' | \
+  awk '{print $1}' | \
   utils/shuffle_list.pl | head -$num_utts_subset > $dir/valid_uttlist || exit 1;
+#  awk -v mf_len=222 '{if ($2 == mf_len) print $1}' | \
 
 len_uttlist=`wc -l $dir/valid_uttlist | awk '{print $1}'`
 if [ $len_uttlist -lt $num_utts_subset ]; then
@@ -133,8 +134,9 @@ if [ -f $data/utt2uniq ]; then  # this matters if you use data augmentation.
   rm $dir/uniq2utt $dir/valid_uttlist.tmp
 fi
 
+# awk -v mf_len=222 '{if ($2 == mf_len) print $1}' | \
 cat $data/utt2len | \
-  awk -v mf_len=222 '{if ($2 == mf_len) print $1}' | \
+  awk '{print $1}' | \
    utils/filter_scp.pl --exclude $dir/valid_uttlist | \
    utils/shuffle_list.pl | head -$num_utts_subset > $dir/train_subset_uttlist || exit 1;
 len_uttlist=`wc -l $dir/train_subset_uttlist | awk '{print $1}'`

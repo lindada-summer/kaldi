@@ -239,13 +239,14 @@ bool TrainingGraphToSupervision(
   using fst::StdArc;
   using fst::StdVectorFst;
   StdVectorFst trans2word_fst(training_graph);
-
+  fst::RmEpsilon(&trans2word_fst);
   // first change labels to pdf-id + 1
   int32 num_states = trans2word_fst.NumStates();
   for (int32 state = 0; state < num_states; state++) {
     for (fst::MutableArcIterator<StdVectorFst> aiter(&trans2word_fst, state);
          !aiter.Done(); aiter.Next()) {
       const StdArc &arc = aiter.Value();
+      KALDI_ASSERT(arc.ilabel != 0);
       StdArc arc2(arc);
       arc2.ilabel = arc2.olabel = trans_model.TransitionIdToPdf(arc.ilabel) + 1;
       aiter.SetValue(arc2);
@@ -777,9 +778,10 @@ bool AddWeightToSupervisionFst(const fst::StdVectorFst &normalization_fst,
     // the composed result will be epsilon free.
     fst::StdVectorFst supervision_fst_noeps(supervision->e2e_fsts[0]);
     fst::RmEpsilon(&supervision_fst_noeps);
-    if (!TryDeterminizeMinimize(kSupervisionMaxStates,
-                                &supervision_fst_noeps))
-      return false;
+
+//    if (!TryDeterminizeMinimize(kSupervisionMaxStates,
+//                                &supervision_fst_noeps))
+//      return false;
 
     // note: by default, 'Compose' will call 'Connect', so if the
     // resulting FST is not connected, it will end up empty.
@@ -791,9 +793,9 @@ bool AddWeightToSupervisionFst(const fst::StdVectorFst &normalization_fst,
     // projection should not be necessary, as both FSTs are acceptors.
     // determinize and minimize to make it as compact as possible.
 
-    if (!TryDeterminizeMinimize(kSupervisionMaxStates,
-                                &composed_fst))
-      return false;
+//    if (!TryDeterminizeMinimize(kSupervisionMaxStates,
+//                                &composed_fst))
+//      return false;
     supervision->e2e_fsts[0] = composed_fst;
     return true;
   }

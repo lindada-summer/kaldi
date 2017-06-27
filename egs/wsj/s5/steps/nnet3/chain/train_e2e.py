@@ -282,6 +282,7 @@ def train(args, run_opts):
       feat_dim *= 3
     ivector_dim = common_lib.get_ivector_dim(args.online_ivector_dir)
     ivector_id = common_lib.get_ivector_extractor_id(args.online_ivector_dir)
+    logger.info("feat-dim: {}, iv_dim: {}".format(feat_dim, ivector_dim))
 
     # split the training data into parts for individual jobs
     # we will use the same number of jobs as that used for alignment
@@ -429,7 +430,7 @@ def train(args, run_opts):
     equal_align = True  # keep it true for 20 first iterations
     for iter in range(num_iters):
 
-        if disable_mmi and num_archives_processed*100 / num_archives_to_process > args.no_mmi_percent:
+        if disable_mmi and num_archives_processed*100 / num_archives_to_process >= args.no_mmi_percent:
             disable_mmi = False
             logger.info("*** MMI was enabled at percentage: {} ***".format(
                 num_archives_processed * 100 / num_archives_to_process))
