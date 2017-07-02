@@ -113,6 +113,9 @@ def get_args():
     parser.add_argument("--trainer.no-mmi-percent", type=float, dest='no_mmi_percent',
                         default=50.0,
                         help="Percentage of epochs to do training with MMI disabled")
+    parser.add_argument("--trainer.no-viterbi-percent", type=float, dest='no_viterbi_percent',
+                        default=100.0,
+                        help="Percentage of epochs to do training with Viterbi disabled")
     parser.add_argument("--trainer.equal-align-iters", type=int, dest='equal_align_iters',
                         default=1000,
                         help="Number of iters to do training with EqaulAlign enabled")
@@ -427,13 +430,17 @@ def train(args, run_opts):
                 "{1} iterations".format(args.num_epochs, num_iters))
 
     disable_mmi = True
+    disable_viterbi = True
     equal_align = True  # keep it true for 20 first iterations
     for iter in range(num_iters):
 
-        if disable_mmi and num_archives_processed*100 / num_archives_to_process >= args.no_mmi_percent:
+        percent = num_archives_processed*100 / num_archives_to_process
+        if disable_mmi and percent >= args.no_mmi_percent:
             disable_mmi = False
-            logger.info("*** MMI was enabled at percentage: {} ***".format(
-                num_archives_processed * 100 / num_archives_to_process))
+            logger.info("*** MMI was enabled at percentage: {} ***".format(percent))
+        if disable_viterbi and percent >= args.no_viterbi_percent:
+            disable_viterbi = False
+            logger.info("*** Viterbi was enabled at percentage: {} ***".format(percent))
         if equal_align and iter > args.equal_align_iters:
             equal_align = False
             logger.info("*** equal_align was disabled at iter: {} ***".format(iter))
@@ -493,8 +500,8 @@ def train(args, run_opts):
                 frame_subsampling_factor=args.frame_subsampling_factor,
                 run_opts=run_opts,
                 chain_train_opts=(args.chain_train_opts +
-                  ' --disable-mmi={} --equal-align={}'.format(
-                                                     disable_mmi, equal_align)))
+                  ' --disable-mmi={} --viterbi={} --equal-align={}'.format(
+                                                     disable_mmi, not disable_viterbi, equal_align)))
 
 
             if args.cleanup:

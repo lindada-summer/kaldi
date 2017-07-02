@@ -93,7 +93,7 @@ dir=$4
 [ ! -z "$online_ivector_dir" ] && \
   extra_files="$online_ivector_dir/ivector_online.scp $online_ivector_dir/ivector_period"
 
-for f in $data/feats.scp \
+for f in $data/feats.scp $data/allowed_lengths.txt \
          $chaindir/{0.trans_mdl,tree,normalization.fst} $extra_files; do
   [ ! -f $f ] && echo "$0: no such file $f" && exit 1;
 done
@@ -107,6 +107,7 @@ mkdir -p $dir/log $dir/info
 
 frame_shift=$(utils/data/get_frame_shift.sh $data)
 utils/data/get_utt2dur.sh $data
+
 frames_per_eg=$(cat $data/allowed_lengths.txt | tr '\n' , | sed 's/,$//')
 
 [ ! -f "$data/utt2len" ] && feat-to-len scp:$data/feats.scp ark,t:$data/utt2len

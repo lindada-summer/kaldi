@@ -68,6 +68,11 @@ class FullNumeratorComputation {
   // deriv_weight) to 'nnet_output_deriv'.
   bool Backward(BaseFloat deriv_weight, CuMatrixBase<BaseFloat> *nnet_output_deriv);
 
+  bool Viterbi(
+      BaseFloat deriv_weight,
+      BaseFloat *tot_logprob,
+      CuMatrixBase<BaseFloat> *nnet_output_deriv);
+
  private:
 
   enum { kMaxDerivTimeSteps = 4 };
@@ -106,6 +111,10 @@ class FullNumeratorComputation {
   // the derivs w.r.t. the nnet outputs (transposed)
   Matrix<BaseFloat> nnet_output_deriv_transposed_;
 
+  // Viterbi
+  Matrix<BaseFloat> logdelta_;
+  std::vector<std::vector<std::vector<int32> > > sai_;
+
   Matrix<BFloat> alpha_;
 
   Matrix<BFloat> beta_;
@@ -123,4 +132,3 @@ class FullNumeratorComputation {
 }  // namespace kaldi
 
 #endif  // KALDI_CHAIN_CHAIN_FULL_NUMERATOR_H_
-

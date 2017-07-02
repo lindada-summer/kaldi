@@ -51,12 +51,143 @@ FullNumeratorComputation::FullNumeratorComputation(
   //KALDI_ASSERT(opts_.leaky_hmm_coefficient > 0.0 &&
   //             opts_.leaky_hmm_coefficient < 1.0);
 
+  if (opts_.viterbi) {
+    using std::vector;
+    alpha_.Resize(0, 0);
+    beta_.Resize(0, 0);
+    logdelta_ = Matrix<BaseFloat>(frames_per_sequence_ + 1,
+                                num_graph_.MaxNumStates() * num_sequences_,
+                                kUndefined);
+    logdelta_.Set(-std::numeric_limits<BaseFloat>::infinity());
+    sai_ = vector<vector<vector<int32> > >(frames_per_sequence_ + 1,
+                                           vector<vector<int32> >(num_sequences_,
+                                                                  vector<int32>(num_graph_.MaxNumStates(), -1)));
+  }
   KALDI_ASSERT(nnet_output.NumRows() % num_sequences_ == 0);
   exp_nnet_output_transposed_.ApplyExp();
-//  std::cout << "exp nnet output transposed: \n";
-//  exp_nnet_output_transposed_.Write(std::cout, false);
 }
 
+// TODO: merge this with the current Forward/Backward functions --> more elagant
+// Also handle Offset if enabled
+bool FullNumeratorComputation::Viterbi(
+    BaseFloat deriv_weight,
+    BaseFloat *tot_logprob,
+    CuMatrixBase<BaseFloat> *nnet_output_deriv) {
+  using std::vector;
+  KALDI_ASSERT(opts_.viterbi);
+  ok_ = true;
+
+  // init
+  BaseFloat *first_frame_logdelta = logdelta_.RowData(0);
+  SubVector<BaseFloat> logdelta_state0(first_frame_logdelta, num_sequences_);
+  logdelta_state0.Set(0.0);
+
+  // viterbi
+  int32 num_pdfs = exp_nnet_output_transposed_.NumRows(),
+      max_num_hmm_states = num_graph_.MaxNumStates();
+  vector<vector<int32> > ali(num_sequences_, vector<int32>(frames_per_sequence_, -1));
+  for (int32 t = 1; t <= frames_per_sequence_; t++) {
+
+    SubMatrix<BaseFloat> this_logdelta(
+        logdelta_.RowData(t),
+        max_num_hmm_states,
+        num_sequences_,
+        num_sequences_);
+    SubMatrix<BaseFloat> prev_logdelta(
+        logdelta_.RowData(t - 1),
+        max_num_hmm_states,
+        num_sequences_,
+        num_sequences_);
+    // 'probs' is the matrix of pseudo-likelihoods for frame t - 1.
+    SubMatrix<BaseFloat> probs(exp_nnet_output_transposed_, 0, num_pdfs,
+                               (t - 1) * num_sequences_, num_sequences_);
+    for (int32 seq = 0; seq < num_sequences_; seq++) {
+      bool at_least_one_state_active = false;
+      for (int32 j = 0; j < num_graph_.NumStates()[seq]; j++) {  // iterate over transitions i --> j
+        float max = -std::numeric_limits<float>::infinity();
+        int32 argmax = -1;
+        for (int32 tr_idx = num_graph_.BackwardTransitions()[seq * max_num_hmm_states + j].first;
+             tr_idx < num_graph_.BackwardTransitions()[seq * max_num_hmm_states + j].second; tr_idx++) {
+          const DenominatorGraphTransition &tr = num_graph_.Transitions()[tr_idx];
+          BaseFloat log_transition_prob = Log(tr.transition_prob);
+          int32 pdf_id = tr.pdf_id, i = tr.hmm_state;
+          BaseFloat log_prob = Log(probs(pdf_id, seq));
+          BaseFloat this_arc = prev_logdelta(i, seq) + log_transition_prob + log_prob;
+          if (this_arc > max) {
+            max = this_arc;
+            argmax = tr_idx;
+          }
+        } // i
+        if (max - max == 0 && argmax != -1)
+          at_least_one_state_active = true;
+        this_logdelta(j, seq) = max;
+        sai_[t - 1][seq][j] = argmax;
+      } // j
+      if (!at_least_one_state_active) {
+        KALDI_WARN << "Viterbi failure: "
+                   << " seq: " << seq
+                   << " t: " << t;
+        ok_ = false;
+        return false;
+      }
+
+      // finalize
+      if (t == frames_per_sequence_) {
+        float max = -std::numeric_limits<float>::infinity();
+        int32 argmax = -1;
+        for (int j = 0; j < num_graph_.NumStates()[seq]; j++) {
+          float fin_logprob = Log(num_graph_.FinalProbs()(j, seq));
+          if (this_logdelta(j, seq) + fin_logprob > max) {
+            max = this_logdelta(j, seq) + fin_logprob;
+            argmax = sai_[t - 1][seq][j];
+          }
+        }
+        if (max - max != 0 || argmax == -1) {
+          KALDI_WARN << "Viterbi final state failure: "
+                     << " seq: " << seq
+                     << " t: " << t
+                     << " max: " << max
+                     << " argmax: " << argmax;
+          ok_ = false;
+          return false;
+        }
+        tot_log_prob_(seq) = max;
+        ali[seq][t - 1] = num_graph_.Transitions()[argmax].pdf_id;
+        // backtrack
+        int32 tr_idx = argmax;
+        for (int32 t1 = frames_per_sequence_ - 2; t1 >= 0; t1--) {
+          tr_idx = sai_[t1][seq][num_graph_.Transitions()[tr_idx].hmm_state];
+          ali[seq][t1] = num_graph_.Transitions()[tr_idx].pdf_id;
+        }
+      } //fin
+
+    } // seq
+  } // t
+
+
+  // derivatives
+
+  // free some space
+  logdelta_.Resize(0, 0);
+  *tot_logprob = tot_log_prob_.Sum();
+  if (nnet_output_deriv) {
+    Matrix<BaseFloat> deriv(nnet_output_deriv->NumRows(), nnet_output_deriv->NumCols(),
+                            kSetZero);
+    for (int32 s = 0; s < num_sequences_; s++)
+      for (int32 t = 0; t < frames_per_sequence_; t++)
+        deriv(t * num_sequences_ + s, ali[s][t]) = 1.0;
+    nnet_output_deriv->CopyFromMat(deriv);
+  }
+  /*  if (GetVerboseLevel() >= 3) {
+    for (int32 s = 0; s < num_sequences_; s++) {
+      std::cout << "seq-" << s << "  " << tot_log_prob_(s) << "    ";
+      for (int32 t = 0; t < frames_per_sequence_; t++)
+        std::cout << ali[s][t] << " ";
+      std::cout << "\n";
+    }
+    }*/
+  return true;
+}
 
 void FullNumeratorComputation::AlphaFirstFrame() {
   // select alpha for time 0
@@ -186,6 +317,7 @@ void FullNumeratorComputation::AlphaGeneralFrame(int32 t) {
 }
 
 BaseFloat FullNumeratorComputation::Forward() {
+  KALDI_ASSERT(!opts_.viterbi);
   AlphaFirstFrame();
   for (int32 t = 1; t <= frames_per_sequence_; t++) {
     AlphaGeneralFrame(t);
@@ -238,6 +370,7 @@ BaseFloat FullNumeratorComputation::ComputeTotLogLike() {
 bool FullNumeratorComputation::Backward(
     BaseFloat deriv_weight,
     CuMatrixBase<BaseFloat> *nnet_output_deriv) {
+  KALDI_ASSERT(!opts_.viterbi);
   BetaLastFrame();
   for (int32 t = frames_per_sequence_ - 1; t >= 0; t--) {
     BetaGeneralFrame(t);

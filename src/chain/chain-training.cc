@@ -99,33 +99,37 @@ void ComputeChainObjfAndDeriv(const ChainTrainingOptions &opts,
   } else {
     NumeratorGraph ng(supervision, false);
     FullNumeratorComputation fnum(opts, ng, nnet_output);
-    num_logprob_weighted = fnum.Forward();
-    KALDI_LOG << "######### num_logprob_weighted: " << num_logprob_weighted;
-    /*if (num_logprob_weighted - num_logprob_weighted != 0) {
-      std::ofstream os1("nnet-output.txt");
-      nnet_output.Write(os1, false);
-      os1.close();
-      std::ofstream os2("supervision.txt");
-      supervision.Write(os2, false);
-      os2.close();
-      KALDI_ERR << "NUM FAILED";
-    }*/
-    num_ok = (num_logprob_weighted - num_logprob_weighted == 0);
-    if (!num_ok)
-    KALDI_LOG << "FB failed. Trying equal-align...";
-    if (nnet_output_deriv && num_ok)
-      num_ok = fnum.Backward(supervision.weight, nnet_output_deriv);
-    //if (!ok)
-    //  KALDI_ERR << "full supervision computation failed";
+
+    if (!opts.viterbi) {
+      num_logprob_weighted = fnum.Forward();
+      KALDI_LOG << "######### num_logprob_weighted: " << num_logprob_weighted;
+      /*if (num_logprob_weighted - num_logprob_weighted != 0) {
+        std::ofstream os1("nnet-output.txt");
+        nnet_output.Write(os1, false);
+        os1.close();
+        std::ofstream os2("supervision.txt");
+        supervision.Write(os2, false);
+        os2.close();
+        KALDI_ERR << "NUM FAILED";
+        }*/
+      num_ok = (num_logprob_weighted - num_logprob_weighted == 0);
+      if (!num_ok)
+        KALDI_LOG << "FB failed.";
+      if (nnet_output_deriv && num_ok)
+        num_ok = fnum.Backward(supervision.weight, nnet_output_deriv);
+    } else {
+      KALDI_LOG << "doing Viterbi...";
+      num_ok = fnum.Viterbi(supervision.weight, &num_logprob_weighted, nnet_output_deriv);
+      if (num_ok)
+        KALDI_LOG << "Viterbi successful. vit_logprob: " << num_logprob_weighted;
+    }
     if (!num_ok && opts.equal_align) {
       num_ok = TryEqualAlign(supervision, &num_logprob_weighted, nnet_output_deriv);
       KALDI_LOG << "######### EqualAlign logprob: " << num_logprob_weighted << "     ok:" << num_ok;
     } else if (!num_ok && !opts.equal_align) {
       KALDI_LOG << "######### Not doing equal-align because it is disabled.    ok:" << num_ok;
     }
-
   }
-
 
   bool ok = true;
   BaseFloat den_logprob = 0.0;

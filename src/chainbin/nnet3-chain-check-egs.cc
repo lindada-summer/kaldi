@@ -50,6 +50,7 @@ int main(int argc, char *argv[]) {
       sup.label_dim = 10;
       sup.fst = num3;
       sup.e2e_fsts.push_back(num3);
+
       NumeratorGraph numg(sup, subtract);
       //num3g.PrintInfo(true);
       CuMatrix<BaseFloat>
@@ -67,19 +68,27 @@ int main(int argc, char *argv[]) {
         }
       obs_mat.Write(std::cout, false);
       ChainTrainingOptions copts;
+      std::cout << "Viterbi: " << copts.viterbi << "\n";
       FullNumeratorComputation numc(copts, numg, obs_mat);
       BaseFloat full_num_logprob = numc.Forward();
       numc.Backward(1.0, &deriv1);
       std::cout << "full num log prob: " << full_num_logprob << "\n";
       deriv1.Write(std::cout, false);
-      NumeratorComputation nc(sup, obs_mat);
-      BaseFloat num_logprob = nc.Forward();
-      nc.Backward(&deriv2);
-      std::cout << "num log prob: " << num_logprob << "\n";
-      deriv2.Write(std::cout, false);
+
+      //NumeratorComputation nc(sup, obs_mat);
+      //BaseFloat num_logprob = nc.Forward();
+      //nc.Backward(&deriv2);
+      //std::cout << "num log prob: " << num_logprob << "\n";
+      //deriv2.Write(std::cout, false);
+
+      copts.viterbi = true;
+      FullNumeratorComputation numc2(copts, numg, obs_mat);
+      BaseFloat vit_logprob;
+      numc2.Viterbi(1.0, &vit_logprob, &deriv1);
+      std::cout << "vit logprob: "  << vit_logprob << "\n";
+      deriv1.Write(std::cout, false);
+      exit(0);
     }
-
-
 
     if (po.NumArgs() != 1) {
       po.PrintUsage();
@@ -135,10 +144,10 @@ int main(int argc, char *argv[]) {
 
       CuMatrix<BaseFloat> obs_mat(T, N);
       for (int t = 0; t < obs_mat.NumRows(); t++)
-	for (int j = 0; j < obs_mat.NumCols(); j++) {
-	  int pdfid = j + 1;
-	  obs_mat(t, j) = Log((float)((t+1)*(pdfid+1) % 4 + 1));
-	}
+        for (int j = 0; j < obs_mat.NumCols(); j++) {
+          int pdfid = j + 1;
+          obs_mat(t, j) = Log((float)((t+1)*(pdfid+1) % 4 + 1));
+        }
       random_nnet_output = obs_mat;
        /*
       pf.tic("on-CPU");
@@ -158,6 +167,14 @@ int main(int argc, char *argv[]) {
       ok = cunum.Backward(eg.outputs[0].supervision.weight, &nnet_output_deriv2);
       std::cout << "ok: " << ok << "\n";
       pf.tac();
+
+      pf.tic("Viterbi");
+      opts.viterbi = true;
+      FullNumeratorComputation numc2(opts, ng, random_nnet_output);
+      BaseFloat vit_logprob;
+      numc2.Viterbi(1.0, &vit_logprob, &nnet_output_deriv2);
+      std::cout << "vit logprob: "  << vit_logprob << "\n";
+
 
       std::cout << "Profiling results:\n" << pf.toString() << "\n";
 
@@ -183,4 +200,3 @@ int main(int argc, char *argv[]) {
     return -1;
   }
 }
-
