@@ -5,13 +5,12 @@
 set -e
 
 # configs for 'chain'
-stage=10
+stage=12
 train_stage=-10
 get_egs_stage=-10
-speed_perturb=true
-affix=_septopo1a
+affix=_notset
 decode_iter=
-lat_beam=8.0
+lat_beam=6.5
 beam=15.0
 
 # training options
@@ -22,10 +21,10 @@ max_param_change=2.0
 final_layer_normalize_target=0.5
 num_jobs_initial=3
 num_jobs_final=16
-minibatch_size=150=128,64/300=128,64,32/600=64,32,16/1200=16,8
+minibatch_size=150=128,64/300=100,64,32/600=50,32,16/1200=16,8
 remove_egs=false
 common_egs_dir=
-no_mmi_percent=101
+no_mmi_percent=20
 l2_regularize=0.00005
 dim=800
 frames_per_iter=2500000
@@ -34,25 +33,25 @@ leaky_hmm_coeff=0.1
 hid_max_change=0.75
 final_max_change=1.5
 self_repair=1e-5
-acwt=0.9
-post_acwt=9.0
+acwt=1.0
+post_acwt=10.0
 num_scale_opts="--transition-scale=1.0 --self-loop-scale=1.0"
 equal_align_iters=19
-den_use_initials=false
-den_use_finals=true
+den_use_initials=true
+den_use_finals=false
 slc=1.0
 shared_phones=true
 train_set=train_nodup_seg_spEx_hires
-topo_affix=_sep1a
-tree_affix=_1f
-topo_opts="--sil-self-loop-prob 0.8 --nonsil-self-loop-prob 0.25"
+topo_affix=_chain
+tree_affix=_dataEx1-shared-tr1sl1
+topo_opts=
 uniform_lexicon=false
 first_layer_splice=-1,0,1
 add_deltas=false
 disable_ng=false
 momentum=0
-nnet_block=relu-layer
-
+nnet_block=relu-batchnorm-layer
+no_viterbi_percent=100
 # End configuration section.
 echo "$0 $@"  # Print the command line for logging
 
@@ -170,6 +169,7 @@ if [ $stage -le 13 ]; then
     --egs.opts "--normalize-egs false --add-deltas $add_deltas" \
     --trainer.options="--compiler.cache-capacity=512 --den-use-initials=$den_use_initials --den-use-finals=$den_use_finals" \
     --trainer.no-mmi-percent $no_mmi_percent \
+    --trainer.no-viterbi-percent $no_viterbi_percent \
     --trainer.equal-align-iters $equal_align_iters \
     --trainer.num-chunk-per-minibatch $minibatch_size \
     --trainer.frames-per-iter $frames_per_iter \
