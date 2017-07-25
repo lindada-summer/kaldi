@@ -374,7 +374,7 @@ bool FullNumeratorComputation::Backward(
   BetaLastFrame();
   for (int32 t = frames_per_sequence_ - 1; t >= 0; t--) {
     BetaGeneralFrame(t);
-    if (GetVerboseLevel() >= 1 || t == 0)
+    if (GetVerboseLevel() >= 1 || t == 0 || (t == frames_per_sequence_ - 1 && opts_.check_derivs))
       BetaGeneralFrameDebug(t);
     if (t % kMaxDerivTimeSteps == 0) {
       // commit the derivative stored in exp_nnet_output_transposed_ by adding

@@ -12,6 +12,7 @@ nj=4
 stage=0
 shared_phones=true
 uniform_lexicon=false
+treedir=
 
 # by default we get these from den graph by composing with normalization fst
 scale_opts="--transition-scale=0.0 --self-loop-scale=0.0"
@@ -46,7 +47,6 @@ sdata=$data/split$nj;
 
 cp $lang/phones.txt $dir || exit 1;
 
-echo "$0: Initializing monophone system."
 
 [ ! -f $lang/phones/sets.int ] && exit 1;
 
@@ -55,10 +55,17 @@ if $shared_phones; then
 fi
 
 if [ $stage -le 0 ]; then
-  # feat dim does not matter here. Just set it to 10
-  $cmd $dir/log/init_mono_mdl_tree.log \
-    gmm-init-mono $shared_phones_opt $lang/topo 10 \
-    $dir/0.mdl $dir/tree || exit 1;
+  if [ -z $treedir ]; then
+    echo "$0: Initializing monophone system."
+    # feat dim does not matter here. Just set it to 10
+    $cmd $dir/log/init_mono_mdl_tree.log \
+         gmm-init-mono $shared_phones_opt $lang/topo 10 \
+         $dir/0.mdl $dir/tree || exit 1;
+  else
+    echo "$0: Copied tree/mdl from $treedir." >$dir/log/init_mdl_tree.log
+    cp $treedir/final.mdl $dir/0.mdl || exit 1;
+    cp $treedir/tree $dir || exit 1;
+  fi
   copy-transition-model $dir/0.mdl $dir/0.trans_mdl
 fi
 
@@ -76,4 +83,3 @@ if [ $stage -le 1 ]; then
     "ark:sym2int.pl --map-oov $oov_sym -f 2- $lang/words.txt < $sdata/JOB/text|" \
     "ark,scp:$dir/fst.JOB.ark,$dir/fst.JOB.scp" || exit 1;
 fi
-

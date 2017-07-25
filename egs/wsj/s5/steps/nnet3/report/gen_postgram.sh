@@ -15,6 +15,8 @@ if [ $# != 4 ]; then
    echo "Get the posteriorgram for an utterance using an nnet3 model (CE, LFR, disc, chain, end2end)."
    echo "usage: $0 <utt-id> <data-dir> <lang-dir> <nnet3-model-di>"
    echo "e.g.:  $0 utt-0001 data/test data/lang exp/chain/7k"
+   echo "some of the options: "
+   echo "--iter iter"
    exit 1;
 fi
 
@@ -69,7 +71,7 @@ outdir=postgrams/$(basename $dir)/$iter
 mkdir -p $outdir
 nnet3-compute-postgram --use-gpu=no --acoustic-scale=$acoustic_scale --granularity=$granularity \
                        --phone-sets-file=$lang/phones/sets.int $frame_subsampling_opt \
-                       $ivector_opts $dir/$iter.mdl "$feats" ark,t:- | \
+                       $ivector_opts $dir/$iter.mdl "$feats" ark,t:- | tee mat.txt | \
                        steps/nnet3/report/matrix-to-postgram.py --phones "$phones" \
                        --transcript "$transcript" --outdir $outdir \
                        --title-prefix "$(basename $dir)/$iter.mdl"

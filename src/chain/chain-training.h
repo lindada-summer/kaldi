@@ -64,11 +64,13 @@ struct ChainTrainingOptions {
   bool equal_align;
   bool den_use_initials, den_use_finals;
   bool viterbi;
+  bool check_derivs;
 
   ChainTrainingOptions(): l2_regularize(0.0), leaky_hmm_coefficient(1.0e-05),
                           xent_regularize(0.0), disable_mmi(false),
                           equal_align(true), den_use_initials (true),
-                          den_use_finals (false), viterbi(false) { }
+                          den_use_finals (false), viterbi(false),
+                          check_derivs(false) { }
 
   void Register(OptionsItf *opts) {
     opts->Register("l2-regularize", &l2_regularize, "l2 regularization "
@@ -90,6 +92,7 @@ struct ChainTrainingOptions {
                    "(all states are initial with some probability)");
     opts->Register("den-use-finals", &den_use_finals, "Use final state probs in den");
     opts->Register("viterbi", &viterbi, "Use Viterbi instead of FB");
+    opts->Register("check-derivs", &check_derivs, "Double check the derivatives");
   }
 };
 

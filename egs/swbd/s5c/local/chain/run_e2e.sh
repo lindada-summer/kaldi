@@ -52,6 +52,8 @@ disable_ng=false
 momentum=0
 nnet_block=relu-batchnorm-layer
 no_viterbi_percent=100
+src_tree_dir=  # set this in case we want to use another tree (this won't be end2end anymore)
+
 # End configuration section.
 echo "$0 $@"  # Print the command line for logging
 
@@ -108,6 +110,7 @@ if [ $stage -le 11 ]; then
                                    --shared-phones $shared_phones \
                                    --uniform-lexicon $uniform_lexicon \
                                    --scale-opts "$num_scale_opts" \
+                                   --treedir "$src_tree_dir" \
                                    data/$train_set $lang $treedir
   cp exp/chain/e2e_tree_a/phone_lm.fst $treedir/
 fi

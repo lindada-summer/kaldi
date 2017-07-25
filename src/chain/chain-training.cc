@@ -114,7 +114,7 @@ void ComputeChainObjfAndDeriv(const ChainTrainingOptions &opts,
         }*/
       num_ok = (num_logprob_weighted - num_logprob_weighted == 0);
       if (!num_ok)
-        KALDI_LOG << "FB failed.";
+        KALDI_LOG << "Num Forward failed.";
       if (nnet_output_deriv && num_ok)
         num_ok = fnum.Backward(supervision.weight, nnet_output_deriv);
     } else {
@@ -129,6 +129,16 @@ void ComputeChainObjfAndDeriv(const ChainTrainingOptions &opts,
     } else if (!num_ok && !opts.equal_align) {
       KALDI_LOG << "######### Not doing equal-align because it is disabled.    ok:" << num_ok;
     }
+  }
+
+  if (GetVerboseLevel() >= 2 && nnet_output_deriv && !num_ok) {
+    // Save nnet-output and derivs on disk
+    KALDI_LOG << "Saving nnet-output and nnet-output-deriv for debugging...";
+    std::ofstream of1("nnet-out-deriv.mat");
+    nnet_output_deriv->Write(of1, false);
+    std::ofstream of2("nnet-out.mat");
+    nnet_output.Write(of2, false);
+    KALDI_LOG << "Saved.";
   }
 
   bool ok = true;
@@ -185,7 +195,7 @@ void ComputeChainObjfAndDeriv(const ChainTrainingOptions &opts,
 
   if (opts.l2_regularize == 0.0) {
     *l2_term = 0.0;
-  } else {
+  } else if (num_ok) { // we should have some derivs to include a L2 term
     // compute the l2 penalty term and its derivative
     BaseFloat scale = supervision.weight * opts.l2_regularize;
     *l2_term = -0.5 * scale * TraceMatMat(nnet_output, nnet_output, kTrans);
