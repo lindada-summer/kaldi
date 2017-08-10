@@ -33,6 +33,7 @@ extra_right_context_final=-1
 feat_type=
 online_ivector_dir=
 minimize=false
+add_deltas=false
 # End configuration section.
 
 echo "$0 $@"  # Print the command line for logging
@@ -131,6 +132,10 @@ elif grep 'transform-feats --utt2spk' $srcdir/log/train.1.log >&/dev/null; then
   echo "  but you are not providing the --transform-dir option in test time."
 fi
 ##
+
+if $add_deltas; then
+  feats="$feats add-deltas ark:- ark:- |"
+fi
 
 if [ ! -z "$online_ivector_dir" ]; then
   ivector_period=$(cat $online_ivector_dir/ivector_period) || exit 1;

@@ -35,7 +35,7 @@ set_names() {
   fi
   name=$(echo $1 | cut -d: -f1)
   epoch=$(echo $1 | cut -s -d: -f2)
-  dirname=exp/chain/$name
+  dirname=$name
   if [ -z $epoch ]; then
     epoch_suffix=""
   else
@@ -128,28 +128,28 @@ fi
 
 echo -n "# Final train prob     "
 for x in $*; do
-  prob=$(grep Overall exp/chain/${x}/log/compute_prob_train.final.log | grep -v xent | awk '{print $8}')
+  prob=$(grep Overall ${x}/log/compute_prob_train.final.log | grep -v xent | awk '{print $8}')
   printf "% 10.3f" $prob
 done
 echo
 
 echo -n "# Final valid prob     "
 for x in $*; do
-  prob=$(grep Overall exp/chain/${x}/log/compute_prob_valid.final.log | grep -v xent | awk '{print $8}')
+  prob=$(grep Overall ${x}/log/compute_prob_valid.final.log | grep -v xent | awk '{print $8}')
   printf "% 10.3f" $prob
 done
 echo
 
 echo -n "# Final train prob (xent)    "
 for x in $*; do
-  prob=$(grep Overall exp/chain/${x}/log/compute_prob_train.final.log | grep -w xent | awk '{print $8}')
+  prob=$(grep Overall ${x}/log/compute_prob_train.final.log | grep -w xent | awk '{print $8}')
   printf "% 10.3f" $prob
 done
 echo
 
 echo -n "# Final valid prob (xent)    "
 for x in $*; do
-  prob=$(grep Overall exp/chain/${x}/log/compute_prob_valid.final.log | grep -w xent | awk '{print $8}')
+  prob=$(grep Overall ${x}/log/compute_prob_valid.final.log | grep -w xent | awk '{print $8}')
   printf "% 10.4f" $prob
 done
 echo

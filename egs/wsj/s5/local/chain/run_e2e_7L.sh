@@ -7,9 +7,9 @@ set -e
 stage=12
 train_stage=-10
 get_egs_stage=-10
-affix=_2Ls_p0.2  # 2 layers have dropout with proportion 0.2
+affix=dim600  # 2 layers have dropout with proportion 0.2
 decode_iter=
-lat_beam=6.5
+lat_beam=8.0
 beam=15.0
 
 # training options
@@ -25,7 +25,7 @@ remove_egs=false
 common_egs_dir=
 no_mmi_percent=20
 l2_regularize=0.00005
-dim=512
+dim=600
 frames_per_iter=2500000
 cmvn_opts="--norm-means=true --norm-vars=true"
 leaky_hmm_coeff=0.1
@@ -57,7 +57,11 @@ drop_prop=0.2
 drop_schedule=
 combine_sto_penalty=0.0
 dbl_chk=false
+prefinal_dim=$dim
+frame_subsampling_factor=3
 
+
+proportional_shrink=0.0
 chunk_left_context=0
 chunk_right_context=0
 
@@ -84,7 +88,7 @@ fi
 
 lang=data/lang_e2e${topo_affix}
 treedir=exp/chain/e2e_tree${tree_affix}_topo${topo_affix}
-dir=exp/chain/e2e${affix}${topo_affix}${tree_affix}
+dir=exp/chain/e2e_nodrop_7L${affix}${topo_affix}${tree_affix}
 echo "Run $rid, dir = $dir" >> drop_runs.log
 
 input_dim=40
@@ -127,33 +131,34 @@ if [ $stage -le 12 ]; then
   if $disable_ng; then
     common="affine-comp=AffineComponent"
   fi
-
+  lc1=3
+  rc1=3
+  lc2=3
+  rc2=3
+  if [ "$frame_subsampling_factor" == "2" ]; then
+    echo "------------------- Frame subsampling factor is 2 -------------------"
+    lc1=2
+    rc1=2
+    lc2=4
+    rc2=4
+  fi
   num_targets=$(tree-info $treedir/tree |grep num-pdfs|awk '{print $2}')
   #learning_rate_factor=$(echo "print 0.5/$xent_regularize" | python)
 
   mkdir -p $dir/configs
   cat <<EOF > $dir/configs/network.xconfig
-#  input dim=100 name=ivector
-  input dim=$input_dim name=input
 
-  # please note that it is important to have input layer with the name=input
-  # as the layer immediately preceding the fixed-affine-layer to enable
-  # the use of short notation for the descriptor
-#  fixed-affine-layer name=lda input=Append(-1,0,1) affine-transform-file=$dir/configs/lda.mat
+  input dim=$input_dim name=input
 
   # the first splicing is moved before the lda layer, so no splicing here
   $nnet_block name=tdnn1 input=Append($first_layer_splice) dim=$dim max-change=$hid_max_change self-repair-scale=$self_repair $common
-#  $nnet_block name=tdnn2 input=Append(-1,0,1) dim=$dim max-change=$hid_max_change self-repair-scale=$self_repair $common
-  relu-batchnorm-dropout-layer name=tdnn2 input=Append(-1,0,1) dim=$dim max-change=$hid_max_change self-repair-scale=$self_repair $common
+  $nnet_block name=tdnn2 input=Append(-1,0,1) dim=$dim max-change=$hid_max_change self-repair-scale=$self_repair $common
   $nnet_block name=tdnn3 input=Append(-1,0,1) dim=$dim max-change=$hid_max_change self-repair-scale=$self_repair $common
-  $nnet_block name=tdnn4 input=Append(-3,0,3) dim=$dim max-change=$hid_max_change self-repair-scale=$self_repair $common
-  $nnet_block name=tdnn5 input=Append(-3,0,3) dim=$dim max-change=$hid_max_change self-repair-scale=$self_repair $common
-#  $nnet_block name=tdnn6 input=Append(-3,0,3) dim=$dim max-change=$hid_max_change self-repair-scale=$self_repair $common
-  relu-batchnorm-dropout-layer name=tdnn6 input=Append(-3,0,3) dim=$dim max-change=$hid_max_change self-repair-scale=$self_repair $common
-#  $nnet_block name=tdnn7 input=Append(-3,0,3) dim=$dim max-change=$hid_max_change self-repair-scale=$self_repair $common
+  $nnet_block name=tdnn4 input=Append(-$lc1,0,$rc1) dim=$dim max-change=$hid_max_change self-repair-scale=$self_repair $common
+  $nnet_block name=tdnn5 input=Append(-$lc2,0,$rc1) dim=$dim max-change=$hid_max_change self-repair-scale=$self_repair $common
+  $nnet_block name=tdnn6 input=Append(-$lc2,0,$rc2) dim=$dim max-change=$hid_max_change self-repair-scale=$self_repair $common
 
-  ## adding the layers for chain branch
-  $nnet_block name=prefinal-chain input=tdnn6 dim=$dim target-rms=$final_layer_normalize_target self-repair-scale=$self_repair $common
+  $nnet_block name=prefinal-chain input=tdnn6 dim=$prefinal_dim target-rms=$final_layer_normalize_target self-repair-scale=$self_repair $common
   output-layer name=output include-log-softmax=true dim=$num_targets max-change=$final_max_change $common
 
 EOF
@@ -175,6 +180,7 @@ if [ $stage -le 13 ]; then
     --chain.l2-regularize $l2_regularize \
     --chain.apply-deriv-weights false \
     --chain.lm-opts="--num-extra-lm-states=2000" \
+    --chain.frame-subsampling-factor=$frame_subsampling_factor \
     --egs.dir "$common_egs_dir" \
     --egs.stage $get_egs_stage \
     --egs.opts "--normalize-egs false --add-deltas $add_deltas" \
@@ -192,6 +198,8 @@ if [ $stage -le 13 ]; then
     --trainer.optimization.num-jobs-final $num_jobs_final \
     --trainer.optimization.initial-effective-lrate $initial_effective_lrate \
     --trainer.optimization.final-effective-lrate $final_effective_lrate \
+    --trainer.optimization.shrink-value 1.0 \
+    --trainer.optimization.proportional-shrink $proportional_shrink \
     --trainer.max-param-change $max_param_change \
     --cleanup.remove-egs $remove_egs \
     --cleanup.preserve-model-interval 10 \

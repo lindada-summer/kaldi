@@ -76,6 +76,8 @@ void ComputeChainObjfAndDeriv(const ChainTrainingOptions &opts,
                               BaseFloat *weight,
                               CuMatrixBase<BaseFloat> *nnet_output_deriv,
                               CuMatrixBase<BaseFloat> *xent_output_deriv) {
+  *weight = supervision.weight * supervision.num_sequences *
+      supervision.frames_per_sequence;
   BaseFloat num_logprob_weighted;
   if (nnet_output_deriv)
     nnet_output_deriv->SetZero();
@@ -102,32 +104,33 @@ void ComputeChainObjfAndDeriv(const ChainTrainingOptions &opts,
 
     if (!opts.viterbi) {
       num_logprob_weighted = fnum.Forward();
-      KALDI_LOG << "######### num_logprob_weighted: " << num_logprob_weighted;
-      /*if (num_logprob_weighted - num_logprob_weighted != 0) {
-        std::ofstream os1("nnet-output.txt");
-        nnet_output.Write(os1, false);
-        os1.close();
-        std::ofstream os2("supervision.txt");
-        supervision.Write(os2, false);
-        os2.close();
-        KALDI_ERR << "NUM FAILED";
-        }*/
+      KALDI_LOG << "Doing Forward-Backward. Num Logprob: "
+                << num_logprob_weighted / (*weight);
       num_ok = (num_logprob_weighted - num_logprob_weighted == 0);
-      if (!num_ok)
-        KALDI_LOG << "Num Forward failed.";
-      if (nnet_output_deriv && num_ok)
+      KALDI_LOG << "Num Forward "<< (num_ok ? "succeeded" : "failed") <<".";
+      if (nnet_output_deriv && num_ok) {
         num_ok = fnum.Backward(supervision.weight, nnet_output_deriv);
+        KALDI_LOG << "Num Backward " << (num_ok ? "succeeded" : "failed")
+                  << " (dbl-chk: " << (opts.check_derivs ? "true" : "false") << ").";
+      }
     } else {
-      KALDI_LOG << "doing Viterbi...";
-      num_ok = fnum.Viterbi(supervision.weight, &num_logprob_weighted, nnet_output_deriv);
+      KALDI_LOG << "Doing Viterbi...";
+      num_ok = fnum.Viterbi(supervision.weight, &num_logprob_weighted,
+                            nnet_output_deriv);
       if (num_ok)
-        KALDI_LOG << "Viterbi successful. vit_logprob: " << num_logprob_weighted;
+        KALDI_LOG << "Viterbi succeeded. Viterbi Logprob: "
+                  << num_logprob_weighted / (*weight);
+      else
+        KALDI_LOG << "Viterbi failed. Viterbi Logprob: "
+                  << num_logprob_weighted / (*weight);
     }
     if (!num_ok && opts.equal_align) {
-      num_ok = TryEqualAlign(supervision, &num_logprob_weighted, nnet_output_deriv);
-      KALDI_LOG << "######### EqualAlign logprob: " << num_logprob_weighted << "     ok:" << num_ok;
+      num_ok = TryEqualAlign(supervision, &num_logprob_weighted,
+                             nnet_output_deriv);
+      KALDI_LOG << "Doing EqualAlign. EqAlign Logprob: "
+                << num_logprob_weighted / (*weight) << "     OK:" << num_ok;
     } else if (!num_ok && !opts.equal_align) {
-      KALDI_LOG << "######### Not doing equal-align because it is disabled.    ok:" << num_ok;
+      KALDI_LOG << "Not doing equal-align because it is disabled.";
     }
   }
 
@@ -149,18 +152,23 @@ void ComputeChainObjfAndDeriv(const ChainTrainingOptions &opts,
                                        nnet_output);
 
     den_logprob = denominator.Forward();
-    KALDI_LOG << "######### den logprob : " << den_logprob;
+    KALDI_LOG << "Den Logprob: "
+              << supervision.weight * den_logprob / (*weight);
 
-    if (nnet_output_deriv)
+    if (nnet_output_deriv) {
       ok = denominator.Backward(-supervision.weight,
                                 nnet_output_deriv);
-
+      KALDI_LOG << "Den Backward " << (ok ? "succeeded" : "failed") << ".";
+    }
+  } else if (opts.disable_mmi) {
+    KALDI_LOG << "Not doing denominator because MMI is disabled.";
+  } else {
+    KALDI_LOG << "Not doing denominator because numerator computation failed.";
   }
-  *objf = num_logprob_weighted - supervision.weight * den_logprob;
-  KALDI_LOG << "######### objf: " << *objf;
 
-  *weight = supervision.weight * supervision.num_sequences *
-      supervision.frames_per_sequence;
+  *objf = num_logprob_weighted - supervision.weight * den_logprob;
+  KALDI_LOG << "Objf: " << *objf / *weight;
+
   if (!((*objf) - (*objf) == 0) || !ok || !num_ok) {
     // inf or NaN detected, or denominator computation returned false.
     if (nnet_output_deriv)
@@ -170,7 +178,7 @@ void ComputeChainObjfAndDeriv(const ChainTrainingOptions &opts,
     BaseFloat default_objf = -10;
     KALDI_WARN << "Objective function is " << (*objf)
                << " and denominator computation (if done) returned "
-               << std::boolalpha << ok << " " << num_ok
+               << std::boolalpha << ok << " " << std::boolalpha << num_ok
                << ", setting objective function to " << default_objf
                << " per frame.";
     *objf  = default_objf * *weight;

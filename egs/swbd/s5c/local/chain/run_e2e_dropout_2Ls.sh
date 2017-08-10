@@ -1,6 +1,7 @@
 #!/bin/bash
 
 
+# TO TRY: full set (no nodup)
 set -e
 
 # configs for 'chain'
@@ -18,14 +19,14 @@ initial_effective_lrate=0.001
 final_effective_lrate=0.0001
 max_param_change=2.0
 final_layer_normalize_target=0.5
-num_jobs_initial=2
-num_jobs_final=5
+num_jobs_initial=3
+num_jobs_final=16
 minibatch_size=150=128,64/300=100,64,32/600=50,32,16/1200=16,8
 remove_egs=false
 common_egs_dir=
 no_mmi_percent=20
 l2_regularize=0.00005
-dim=512
+dim=800
 frames_per_iter=2500000
 cmvn_opts="--norm-means=true --norm-vars=true"
 leaky_hmm_coeff=0.1
@@ -40,26 +41,22 @@ den_use_initials=true
 den_use_finals=false
 slc=1.0
 shared_phones=true
-train_set=train_si284_spEx_hires
-test_sets="test_dev93 test_eval92"
+train_set=train_nodup_seg_spEx_hires
 topo_affix=_chain
-tree_affix=_shared-tr1sl1
+tree_affix=_dataEx1-shared-tr1sl1
 topo_opts=
 uniform_lexicon=false
 first_layer_splice=-1,0,1
 add_deltas=false
 disable_ng=false
 momentum=0
-nnet_block=relu-renorm-layer
+nnet_block=relu-batchnorm-layer
 no_viterbi_percent=100
 src_tree_dir=  # set this in case we want to use another tree (this won't be end2end anymore)
 drop_prop=0.2
 drop_schedule=
 combine_sto_penalty=0.0
 dbl_chk=false
-
-chunk_left_context=0
-chunk_right_context=0
 
 # End configuration section.
 echo "$0 $@"  # Print the command line for logging
@@ -84,13 +81,15 @@ fi
 
 lang=data/lang_e2e${topo_affix}
 treedir=exp/chain/e2e_tree${tree_affix}_topo${topo_affix}
-dir=exp/chain/e2e${affix}${topo_affix}${tree_affix}
+dir=exp/chain/e2edrop2Ls${affix}${topo_affix}${tree_affix}
 echo "Run $rid, dir = $dir" >> drop_runs.log
 
 input_dim=40
 if $add_deltas; then
   input_dim=120
 fi
+
+
 
 #local/nnet3/run_e2e_common.sh --stage $stage \
 #  --speed-perturb $speed_perturb \
@@ -106,9 +105,8 @@ if [ $stage -le 10 ]; then
   nonsilphonelist=$(cat $lang/phones/nonsilence.csl) || exit 1;
   # Use our special topology... note that later on may have to tune this
   # topology.
-#  steps/nnet3/chain/gen_topo_e2e.py $topo_opts \
-#                                    $nonsilphonelist $silphonelist >$lang/topo
-  steps/nnet3/chain/gen_topo.py $nonsilphonelist $silphonelist >$lang/topo
+  steps/nnet3/chain/gen_topo_e2e.py $topo_opts \
+                                    $nonsilphonelist $silphonelist >$lang/topo
 fi
 
 if [ $stage -le 11 ]; then
@@ -118,7 +116,7 @@ if [ $stage -le 11 ]; then
                                    --scale-opts "$num_scale_opts" \
                                    --treedir "$src_tree_dir" \
                                    data/$train_set $lang $treedir
-  cp exp/chain/e2e_base/phone_lm.fst $treedir/
+  cp exp/chain/e2e_tree_a/phone_lm.fst $treedir/
 fi
 
 if [ $stage -le 12 ]; then
@@ -143,17 +141,15 @@ if [ $stage -le 12 ]; then
 
   # the first splicing is moved before the lda layer, so no splicing here
   $nnet_block name=tdnn1 input=Append($first_layer_splice) dim=$dim max-change=$hid_max_change self-repair-scale=$self_repair $common
-#  $nnet_block name=tdnn2 input=Append(-1,0,1) dim=$dim max-change=$hid_max_change self-repair-scale=$self_repair $common
-  relu-batchnorm-dropout-layer name=tdnn2 input=Append(-1,0,1) dim=$dim max-change=$hid_max_change self-repair-scale=$self_repair $common
+  relu-batchnorm-dropout-layer name=tdnn2 input=Append(-1,0,1) dim=$dim max-change=$hid_max_change self-repair-scale=$self_repair dropout-proportion=$drop_prop $common
   $nnet_block name=tdnn3 input=Append(-1,0,1) dim=$dim max-change=$hid_max_change self-repair-scale=$self_repair $common
   $nnet_block name=tdnn4 input=Append(-3,0,3) dim=$dim max-change=$hid_max_change self-repair-scale=$self_repair $common
   $nnet_block name=tdnn5 input=Append(-3,0,3) dim=$dim max-change=$hid_max_change self-repair-scale=$self_repair $common
-#  $nnet_block name=tdnn6 input=Append(-3,0,3) dim=$dim max-change=$hid_max_change self-repair-scale=$self_repair $common
-  relu-batchnorm-dropout-layer name=tdnn6 input=Append(-3,0,3) dim=$dim max-change=$hid_max_change self-repair-scale=$self_repair $common
-#  $nnet_block name=tdnn7 input=Append(-3,0,3) dim=$dim max-change=$hid_max_change self-repair-scale=$self_repair $common
+  relu-batchnorm-dropout-layer name=tdnn6 input=Append(-3,0,3) dim=$dim max-change=$hid_max_change self-repair-scale=$self_repair dropout-proportion=$drop_prop $common
+  $nnet_block name=tdnn7 input=Append(-3,0,3) dim=$dim max-change=$hid_max_change self-repair-scale=$self_repair $common
 
   ## adding the layers for chain branch
-  $nnet_block name=prefinal-chain input=tdnn6 dim=$dim target-rms=$final_layer_normalize_target self-repair-scale=$self_repair $common
+  $nnet_block name=prefinal-chain input=tdnn7 dim=$dim target-rms=$final_layer_normalize_target self-repair-scale=$self_repair $common
   output-layer name=output include-log-softmax=true dim=$num_targets max-change=$final_max_change $common
 
 EOF
@@ -200,60 +196,47 @@ if [ $stage -le 13 ]; then
     --dir $dir  || exit 1;
 fi
 
+
 if [ $stage -le 14 ]; then
-  # The reason we are using data/lang here, instead of $lang, is just to
-  # emphasize that it's not actually important to give mkgraph.sh the
-  # lang directory with the matched topology (since it gets the
-  # topology file from the model).  So you could give it a different
-  # lang directory, one that contained a wordlist and LM of your choice,
-  # as long as phones.txt was compatible.
-
-  utils/lang/check_phones_compatible.sh \
-    data/lang_test_tgpr/phones.txt $lang/phones.txt
-  utils/mkgraph.sh \
-    --self-loop-scale 1.0 data/lang_test_tgpr \
-    $dir $treedir/graph_tgpr || exit 1;
-
-  utils/lang/check_phones_compatible.sh \
-    data/lang_test_bd_tgpr/phones.txt $lang/phones.txt
-  utils/mkgraph.sh \
-    --self-loop-scale 1.0 data/lang_test_bd_tgpr \
-    $dir $treedir/graph_bd_tgpr || exit 1;
+  rm -rf $dir/graph_sw1_tg
+  # Note: it might appear that this $lang directory is mismatched, and it is as
+  # far as the 'topo' is concerned, but this script doesn't read the 'topo' from
+  # the lang directory.
+  utils/mkgraph.sh --self-loop-scale $slc data/lang_sw1_tg $dir $dir/graph_sw1_tg
 fi
 
+#          --online-ivector-dir exp/nnet3/ivectors_${decode_set} \
+
+decode_suff=sw1_tg
+wtstr="_a${acwt}_p${post_acwt}_s${slc}"
+graph_dir=$dir/graph_sw1_tg
 if [ $stage -le 15 ]; then
-  frames_per_chunk=150
-  rm $dir/.error 2>/dev/null || true
-
-  for data in $test_sets; do
-    (
-      data_affix=$(echo $data | sed s/test_//)
-      nspk=$(wc -l <data/${data}_hires/spk2utt)
-      for lmtype in tgpr bd_tgpr; do
-        steps/nnet3/decode.sh \
-          --lattice-beam $lat_beam \
-          --acwt 1.0 --post-decode-acwt 10.0 \
-          --extra-left-context $chunk_left_context \
-          --extra-right-context $chunk_right_context \
-          --extra-left-context-initial 0 \
-          --extra-right-context-final 0 \
-          --frames-per-chunk $frames_per_chunk \
-          --nj $nspk --cmd "$decode_cmd"  --num-threads 4 \
-          $treedir/graph_${lmtype} data/${data}_hires ${dir}/decode_${lmtype}_${data_affix} || exit 1
-      done
-      steps/lmrescore.sh \
-        --self-loop-scale 1.0 \
-        --cmd "$decode_cmd" data/lang_test_{tgpr,tg} \
-        data/${data}_hires ${dir}/decode_{tgpr,tg}_${data_affix} || exit 1
-      steps/lmrescore_const_arpa.sh --cmd "$decode_cmd" \
-        data/lang_test_bd_{tgpr,fgconst} \
-       data/${data}_hires ${dir}/decode_${lmtype}_${data_affix}{,_fg} || exit 1
-    ) || touch $dir/.error &
+  iter_opts=
+  if [ ! -z $decode_iter ]; then
+    iter_opts=" --iter $decode_iter "
+  fi
+  for decode_set in train_dev eval2000; do
+      (
+      rm -r $dir/decode_${decode_set}${decode_iter:+_$decode_iter}_${decode_suff} || true
+      steps/nnet3/decode.sh --acwt $acwt --post-decode-acwt $post_acwt --lattice-beam $lat_beam --beam $beam \
+        --nj 50 --cmd "$decode_cmd" $iter_opts --add-deltas $add_deltas \
+        $graph_dir data/${decode_set}_hires $dir/decode${wtstr}_${decode_set}${decode_iter:+_$decode_iter}_${decode_suff} || exit 1;
+      ln -sf decode${wtstr}_${decode_set}${decode_iter:+_$decode_iter}_${decode_suff} $dir/decode_${decode_set}${decode_iter:+_$decode_iter}_${decode_suff}
+      ~/bin/swbd.sh $dir
+      if $has_fisher; then
+        rm -r $dir/decode_${decode_set}${decode_iter:+_$decode_iter}_sw1_fsh_fg || true
+        steps/lmrescore_const_arpa.sh --cmd "$decode_cmd" \
+          data/lang_sw1_{tg,fsh_fg} data/${decode_set}_hires \
+          $dir/decode${wtstr}_${decode_set}${decode_iter:+_$decode_iter}_sw1_{tg,fsh_fg} || exit 1;
+        ln -sf decode${wtstr}_${decode_set}${decode_iter:+_$decode_iter}_sw1_fsh_fg $dir/decode_${decode_set}${decode_iter:+_$decode_iter}_sw1_fsh_fg
+      fi
+      ) &
   done
-  wait
-  [ -f $dir/.error ] && echo "$0: there was a problem while decoding" && exit 1
 fi
+wait;
 
+~/bin/swbd.sh $dir
 echo "Run $rid done. Date: $(date). Results:" >> drop_runs.log
-local/chain/compare_wer.sh $dir
-local/chain/compare_wer.sh $dir >> drop_runs.log
+~/bin/swbd.sh $dir >> drop_runs.log
+local/chain/compare_wer_general.sh $dir
+local/chain/compare_wer_general.sh $dir >> drop_runs.log
