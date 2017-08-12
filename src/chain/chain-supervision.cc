@@ -239,6 +239,7 @@ bool TrainingGraphToSupervision(
   using fst::StdArc;
   using fst::StdVectorFst;
   StdVectorFst trans2word_fst(training_graph);
+  fst::RemoveEpsLocal(&trans2word_fst);
   fst::RmEpsilon(&trans2word_fst);
   // first change labels to pdf-id + 1
   int32 num_states = trans2word_fst.NumStates();
@@ -246,6 +247,7 @@ bool TrainingGraphToSupervision(
     for (fst::MutableArcIterator<StdVectorFst> aiter(&trans2word_fst, state);
          !aiter.Done(); aiter.Next()) {
       const StdArc &arc = aiter.Value();
+      if (arc.ilabel == 0) { KALDI_WARN << "Utterance rejected due to eps on input label"; return false; }
       KALDI_ASSERT(arc.ilabel != 0);
       StdArc arc2(arc);
       arc2.ilabel = arc2.olabel = trans_model.TransitionIdToPdf(arc.ilabel) + 1;

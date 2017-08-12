@@ -57,6 +57,7 @@ drop_prop=0.2
 drop_schedule=
 combine_sto_penalty=0.0
 dbl_chk=false
+base_lang_affix=
 
 # End configuration section.
 echo "$0 $@"  # Print the command line for logging
@@ -79,17 +80,15 @@ where "nvcc" is installed.
 EOF
 fi
 
-lang=data/lang_e2e${topo_affix}
-treedir=exp/chain/e2e_tree${tree_affix}_topo${topo_affix}
-dir=exp/chain/e2edrop2Ls${affix}${topo_affix}${tree_affix}
+lang=data/lang${base_lang_affix}_e2e${topo_affix}
+treedir=exp/chain/e2e${base_lang_affix}_tree${tree_affix}_topo${topo_affix}
+dir=exp/chain/e2edrop_2Ls${base_lang_affix}${affix}${topo_affix}${tree_affix}
 echo "Run $rid, dir = $dir" >> drop_runs.log
 
 input_dim=40
 if $add_deltas; then
   input_dim=120
 fi
-
-
 
 #local/nnet3/run_e2e_common.sh --stage $stage \
 #  --speed-perturb $speed_perturb \
@@ -100,13 +99,14 @@ if [ $stage -le 10 ]; then
   # topo file. [note, it really has two states.. the first one is only repeated
   # once, the second one has zero or more repeats.]
   rm -rf $lang
-  cp -r data/lang $lang
+  cp -r data/lang${base_lang_affix} $lang
   silphonelist=$(cat $lang/phones/silence.csl) || exit 1;
   nonsilphonelist=$(cat $lang/phones/nonsilence.csl) || exit 1;
   # Use our special topology... note that later on may have to tune this
   # topology.
-  steps/nnet3/chain/gen_topo_e2e.py $topo_opts \
-                                    $nonsilphonelist $silphonelist >$lang/topo
+#  steps/nnet3/chain/gen_topo_e2e.py $topo_opts \
+#                                    $nonsilphonelist $silphonelist >$lang/topo
+  steps/nnet3/chain/gen_topo.py $nonsilphonelist $silphonelist >$lang/topo
 fi
 
 if [ $stage -le 11 ]; then
@@ -116,7 +116,7 @@ if [ $stage -le 11 ]; then
                                    --scale-opts "$num_scale_opts" \
                                    --treedir "$src_tree_dir" \
                                    data/$train_set $lang $treedir
-  cp exp/chain/e2e_tree_a/phone_lm.fst $treedir/
+  cp exp/chain/e2e_base/phone_lm${base_lang_affix}.fst $treedir/
 fi
 
 if [ $stage -le 12 ]; then
@@ -202,7 +202,7 @@ if [ $stage -le 14 ]; then
   # Note: it might appear that this $lang directory is mismatched, and it is as
   # far as the 'topo' is concerned, but this script doesn't read the 'topo' from
   # the lang directory.
-  utils/mkgraph.sh --self-loop-scale $slc data/lang_sw1_tg $dir $dir/graph_sw1_tg
+  utils/mkgraph.sh --self-loop-scale $slc data/lang${base_lang_affix}_sw1_tg $dir $dir/graph_sw1_tg
 fi
 
 #          --online-ivector-dir exp/nnet3/ivectors_${decode_set} \
@@ -226,7 +226,7 @@ if [ $stage -le 15 ]; then
       if $has_fisher; then
         rm -r $dir/decode_${decode_set}${decode_iter:+_$decode_iter}_sw1_fsh_fg || true
         steps/lmrescore_const_arpa.sh --cmd "$decode_cmd" \
-          data/lang_sw1_{tg,fsh_fg} data/${decode_set}_hires \
+          data/lang${base_lang_affix}_sw1_{tg,fsh_fg} data/${decode_set}_hires \
           $dir/decode${wtstr}_${decode_set}${decode_iter:+_$decode_iter}_sw1_{tg,fsh_fg} || exit 1;
         ln -sf decode${wtstr}_${decode_set}${decode_iter:+_$decode_iter}_sw1_fsh_fg $dir/decode_${decode_set}${decode_iter:+_$decode_iter}_sw1_fsh_fg
       fi
