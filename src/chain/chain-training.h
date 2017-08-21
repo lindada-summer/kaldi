@@ -66,11 +66,16 @@ struct ChainTrainingOptions {
   bool viterbi;
   bool check_derivs;
 
+  std::string trans_probs_filename;
+  std::string write_trans_stats_prefix;
+  Vector<BaseFloat> trans_probs;
+  BaseFloat min_transition_prob;
+
   ChainTrainingOptions(): l2_regularize(0.0), leaky_hmm_coefficient(1.0e-05),
                           xent_regularize(0.0), disable_mmi(false),
                           equal_align(true), den_use_initials (true),
                           den_use_finals (false), viterbi(false),
-                          check_derivs(false) { }
+                          check_derivs(false), min_transition_prob(0.0) { }
 
   void Register(OptionsItf *opts) {
     opts->Register("l2-regularize", &l2_regularize, "l2 regularization "
@@ -93,6 +98,9 @@ struct ChainTrainingOptions {
     opts->Register("den-use-finals", &den_use_finals, "Use final state probs in den");
     opts->Register("viterbi", &viterbi, "Use Viterbi instead of FB");
     opts->Register("check-derivs", &check_derivs, "Double check the derivatives");
+    opts->Register("trans-probs-filename", &trans_probs_filename, "Double check the derivatives");
+    opts->Register("write-trans-stats-prefix", &write_trans_stats_prefix, "Double check the derivatives");
+    opts->Register("min-transition-prob", &min_transition_prob, "Minimum transition prob for when transition probs are used");
   }
 };
 

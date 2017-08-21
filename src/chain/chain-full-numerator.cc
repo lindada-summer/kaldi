@@ -48,8 +48,6 @@ FullNumeratorComputation::FullNumeratorComputation(
     tot_prob_(num_sequences_, kUndefined),
     tot_log_prob_(num_sequences_, kUndefined),
     ok_(true) {
-  //KALDI_ASSERT(opts_.leaky_hmm_coefficient > 0.0 &&
-  //             opts_.leaky_hmm_coefficient < 1.0);
 
   if (opts_.viterbi) {
     using std::vector;
@@ -64,6 +62,11 @@ FullNumeratorComputation::FullNumeratorComputation(
                                                                   vector<int32>(num_graph_.MaxNumStates(), -1)));
   }
   KALDI_ASSERT(nnet_output.NumRows() % num_sequences_ == 0);
+  if (opts.trans_probs.Dim() != 0) {
+    KALDI_ASSERT(opts.trans_probs.Dim() == exp_nnet_output_transposed_.NumRows());
+    // opts.trans_prob is in log space
+    exp_nnet_output_transposed_.AddVecToCols(1.0, opts.trans_probs);
+  }
   exp_nnet_output_transposed_.ApplyExp();
 }
 

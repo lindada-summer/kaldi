@@ -134,6 +134,21 @@ void ComputeChainObjfAndDeriv(const ChainTrainingOptions &opts,
     }
   }
 
+  if (!opts.write_trans_stats_prefix.empty() && nnet_output_deriv && num_ok) {
+    // compute and save transition stats to a file with random name with prefix.
+    // later all these stats will be aggregated and applied to transition probs
+    // in the num and den graph
+    // these are computed for pdf_id's not tid's actually
+    // [so instead of applying them to num/den graph we can simply apply them
+    // nnet output]
+    CuVector<BaseFloat> stats(nnet_output_deriv->NumCols(), kUndefined);
+    stats.AddRowSumMat(1.0, *nnet_output_deriv, 0.0);
+    std::stringstream ss;
+    ss << opts.write_trans_stats_prefix << time(0) << "-" << Rand() << ".stats";
+    std::ofstream of(ss.str().c_str());
+    stats.Write(of, false);
+  }
+
   if (GetVerboseLevel() >= 2 && nnet_output_deriv && !num_ok) {
     // Save nnet-output and derivs on disk
     KALDI_LOG << "Saving nnet-output and nnet-output-deriv for debugging...";

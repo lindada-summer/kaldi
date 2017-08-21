@@ -58,6 +58,34 @@ int main(int argc, char *argv[]) {
       exit(1);
     }
 
+    if (!opts.chain_config.trans_probs_filename.empty()) {
+      ReadKaldiObject(opts.chain_config.trans_probs_filename,
+                      &(opts.chain_config.trans_probs));
+      for (int32 i = 0; i < opts.chain_config.trans_probs.Dim(); i += 2) {
+        BaseFloat sum = (opts.chain_config.trans_probs(i) +
+                         opts.chain_config.trans_probs(i + 1));
+        opts.chain_config.trans_probs(i) /= sum;
+        opts.chain_config.trans_probs(i + 1) /= sum;
+        BaseFloat p = opts.chain_config.min_transition_prob;
+        if (std::min(opts.chain_config.trans_probs(i),
+                     opts.chain_config.trans_probs(i + 1))
+            < p) {
+          if (opts.chain_config.trans_probs(i)
+              < opts.chain_config.trans_probs(i + 1)) {
+            opts.chain_config.trans_probs(i) = p;
+            opts.chain_config.trans_probs(i + 1) = 1.0 - p;
+          } else {
+            opts.chain_config.trans_probs(i) = 1.0 - p;
+            opts.chain_config.trans_probs(i + 1) = p;
+          }
+        }
+      }
+      KALDI_LOG << "Transitions probs:";
+      opts.chain_config.trans_probs.Write(std::cerr, false);
+      opts.chain_config.trans_probs.ApplyLog();
+    }
+
+
 #if HAVE_CUDA==1
     CuDevice::Instantiate().SelectGpuId(use_gpu);
 #endif

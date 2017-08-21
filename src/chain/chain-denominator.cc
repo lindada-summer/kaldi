@@ -57,6 +57,12 @@ DenominatorComputation::DenominatorComputation(
                  num_sequences_).SetZero();
 
   KALDI_ASSERT(nnet_output.NumRows() % num_sequences == 0);
+  if (opts.trans_probs.Dim() != 0) {
+    KALDI_ASSERT(opts.trans_probs.Dim() == exp_nnet_output_transposed_.NumRows());
+    // opts.trans_prob is in log space
+    CuVector<BaseFloat> cu_trans_probs(opts.trans_probs);
+    exp_nnet_output_transposed_.AddVecToCols(1.0, cu_trans_probs);
+  }
   exp_nnet_output_transposed_.ApplyExp();
 }
 

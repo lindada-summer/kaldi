@@ -114,6 +114,16 @@ void NnetChainTrainer::ProcessOutputs(const NnetChainExample &eg,
                              &nnet_output_deriv,
                              (use_xent ? &xent_deriv : NULL));
 
+    if (GetVerboseLevel() >= 2 && tot_objf == -sup.supervision.weight * sup.supervision.num_sequences *
+      sup.supervision.frames_per_sequence * 10.0) {
+      // Save nnet-output and derivs on disk
+      KALDI_LOG << "Saving eg for debugging...";
+      std::ofstream of("eg.txt");
+      eg.Write(of, false);
+      KALDI_LOG << "Saved eg.";
+    }
+
+
     if (use_xent) {
       // this block computes the cross-entropy objective.
       const CuMatrixBase<BaseFloat> &xent_output = computer->GetOutput(
