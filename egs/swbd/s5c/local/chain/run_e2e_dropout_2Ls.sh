@@ -104,9 +104,9 @@ if [ $stage -le 10 ]; then
   nonsilphonelist=$(cat $lang/phones/nonsilence.csl) || exit 1;
   # Use our special topology... note that later on may have to tune this
   # topology.
-#  steps/nnet3/chain/gen_topo_e2e.py $topo_opts \
-#                                    $nonsilphonelist $silphonelist >$lang/topo
-  steps/nnet3/chain/gen_topo.py $nonsilphonelist $silphonelist >$lang/topo
+  steps/nnet3/chain/gen_topo_e2e.py $topo_opts \
+                                    $nonsilphonelist $silphonelist >$lang/topo
+#  steps/nnet3/chain/gen_topo.py $nonsilphonelist $silphonelist >$lang/topo
 fi
 
 if [ $stage -le 11 ]; then
