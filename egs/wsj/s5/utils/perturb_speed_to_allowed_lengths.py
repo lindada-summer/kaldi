@@ -23,6 +23,7 @@ parser.add_argument('dir', type=str, help='output dir')
 parser.add_argument('--range-factor', type=float, default=0.05,
                     help="""Percentage of durations not covered from each side of
                     duration histogram.""")
+parser.add_argument('--no-speed-perturb',  action='store_true')
 
 args = parser.parse_args()
 
@@ -199,7 +200,8 @@ for u in utts:
     u1.speaker = 'pv1-' + u.speaker
     u1.wavefile = '{} sox -t wav - -t wav - speed {} | '.format(u.wavefile, speed)
     u1.dur = allowed_dur
-    perturbed_utts += [u1]
+    if not args.no_speed_perturb:
+      perturbed_utts += [u1]
 
 
   if i < len(durs) - 1:
@@ -217,7 +219,8 @@ for u in utts:
     u2.speaker = 'pv2-' + u.speaker
     u2.wavefile = '{} sox -t wav - -t wav - speed {} | '.format(u.wavefile, speed)
     u2.dur = allowed_dur2
-    perturbed_utts += [u2]
+    if not args.no_speed_perturb:
+      perturbed_utts += [u2]
 
     delta = allowed_dur2 - u.dur
     if delta <= 1e-4:

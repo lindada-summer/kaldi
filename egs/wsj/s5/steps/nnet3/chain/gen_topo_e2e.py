@@ -30,7 +30,8 @@ parser.add_argument("silence_phones", type=str,
                     help="List of silence phones as integers, separated by colons, e.g. 1:2:3");
 parser.add_argument("--sil-self-loop-prob", type=float, default=0.5)
 parser.add_argument("--nonsil-self-loop-prob", type=float, default=0.5)
-parser.add_argument("--type", type=str, choices=['1pdf', '2pdf'], default="2pdf")
+parser.add_argument("--type", type=str, choices=['1pdf', '2pdf', 'chain'], default="chain")
+
 
 args = parser.parse_args()
 
@@ -43,7 +44,19 @@ nonsil_p = args.nonsil_self_loop_prob
 
 print("<Topology>")
 
-if args.type == "2pdf":
+if args.type == "chain":
+    assert(sil_p == nonsil_p)
+    assert(sil_p == 0.5)
+    print("<Topology>")
+    print("<TopologyEntry>")
+    print("<ForPhones>")
+    print(" ".join([str(x) for x in all_phones]))
+    print("</ForPhones>")
+    print("<State> 0 <ForwardPdfClass> 0 <SelfLoopPdfClass> 1 <Transition> 0 {} <Transition> 1 {} </State>".format(args.self_loop_prob, 1.0 - args.self_loop_prob))
+    print("<State> 1 </State>")
+    print("</TopologyEntry>")
+    print("</Topology>")
+elif args.type == "2pdf":
     if sil_p == nonsil_p:
         print("<TopologyEntry>")
         print("<ForPhones>")

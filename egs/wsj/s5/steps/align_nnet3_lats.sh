@@ -1,7 +1,7 @@
 #!/bin/bash
 #
 # Copyright 2012-2015  Johns Hopkins University (Author: Daniel Povey)
-#                                                Hossein Hadian
+#           2017       Hossein Hadian
 # Apache 2.0
 
 # Begin configuration section.
@@ -24,7 +24,6 @@ extra_left_context=0
 extra_right_context=0
 extra_left_context_initial=-1
 extra_right_context_final=-1
-feat_type=raw
 
 # End configuration options.
 
@@ -63,7 +62,6 @@ cp $srcdir/{tree,final.mdl} $dir || exit 1;
 cmvn_opts=`cat $srcdir/cmvn_opts 2>/dev/null`
 cp $srcdir/cmvn_opts $dir 2>/dev/null # cmn/cmvn option.
 
-echo "$0: feature type is $feat_type"
 feats="ark,s,cs:apply-cmvn $cmvn_opts --utt2spk=ark:$sdata/JOB/utt2spk scp:$sdata/JOB/cmvn.scp scp:$sdata/JOB/feats.scp ark:- |"
 
 tra="ark:utils/sym2int.pl --map-oov $oov -f 2- $lang/words.txt $sdata/JOB/text|";
