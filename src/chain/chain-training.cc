@@ -99,7 +99,10 @@ void ComputeChainObjfAndDeriv(const ChainTrainingOptions &opts,
       numerator.Backward(xent_output_deriv);
     }
   } else {
-    NumeratorGraph ng(supervision, false);
+    NumeratorGraph ng(supervision, opts.offset_first_transitions);
+    if (!opts.pdf_map_filename.empty())
+      ng.MapPdfs(opts.pdf_map);
+
     FullNumeratorComputation fnum(opts, ng, nnet_output);
 
     if (!opts.viterbi) {
@@ -132,6 +135,8 @@ void ComputeChainObjfAndDeriv(const ChainTrainingOptions &opts,
     } else if (!num_ok && !opts.equal_align) {
       KALDI_LOG << "Not doing equal-align because it is disabled.";
     }
+    if (xent_output_deriv && nnet_output_deriv)
+      xent_output_deriv->CopyFromMat(*nnet_output_deriv);
   }
 
   if (!opts.write_trans_stats_prefix.empty() && nnet_output_deriv && num_ok) {

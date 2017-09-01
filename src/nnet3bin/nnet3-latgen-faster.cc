@@ -80,6 +80,15 @@ int main(int argc, char *argv[]) {
       exit(1);
     }
 
+    // This relates to #pdf_tying
+    if (!decodable_opts.pdf_map_filename.empty()) {
+      std::ifstream fs(decodable_opts.pdf_map_filename);
+      ReadIntegerVector(fs, false, &(decodable_opts.pdf_map));
+      KALDI_LOG << "read pdf map. size: " << decodable_opts.pdf_map.size()
+                << "\tmap[0]=" << decodable_opts.pdf_map[0];
+    }
+
+
     std::string model_in_filename = po.GetArg(1),
         fst_in_str = po.GetArg(2),
         feature_rspecifier = po.GetArg(3),

@@ -781,6 +781,8 @@ bool AddWeightToSupervisionFst(const fst::StdVectorFst &normalization_fst,
     fst::StdVectorFst supervision_fst_noeps(supervision->e2e_fsts[0]);
     fst::RmEpsilon(&supervision_fst_noeps);
 
+    // I guess we don't really need this in e2e since the graph is
+    // already determinized and small:
 //    if (!TryDeterminizeMinimize(kSupervisionMaxStates,
 //                                &supervision_fst_noeps))
 //      return false;
@@ -793,8 +795,8 @@ bool AddWeightToSupervisionFst(const fst::StdVectorFst &normalization_fst,
     if (composed_fst.NumStates() == 0)
       return false;
     // projection should not be necessary, as both FSTs are acceptors.
-    // determinize and minimize to make it as compact as possible.
 
+    // again, in e2e, the graphs are already small. No need for these
 //    if (!TryDeterminizeMinimize(kSupervisionMaxStates,
 //                                &composed_fst))
 //      return false;

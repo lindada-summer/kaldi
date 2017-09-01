@@ -195,6 +195,7 @@ if [ $stage -le 13 ]; then
     --trainer.max-param-change $max_param_change \
     --cleanup.remove-egs $remove_egs \
     --cleanup.preserve-model-interval 10 \
+    --cleanup false \
     --feat-dir data/${train_set} \
     --tree-dir $treedir \
     --dir $dir  || exit 1;

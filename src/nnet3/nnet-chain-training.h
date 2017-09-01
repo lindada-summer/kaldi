@@ -36,7 +36,11 @@ struct NnetChainTrainingOptions {
   NnetTrainerOptions nnet_config;
   chain::ChainTrainingOptions chain_config;
   bool apply_deriv_weights;
-  NnetChainTrainingOptions(): apply_deriv_weights(true) { }
+  int32 num_phone_sets, num_pdfs_to_tie;
+  std::string write_pdf_map_filename;
+  NnetChainTrainingOptions(): apply_deriv_weights(true),
+                              num_phone_sets(0),
+                              num_pdfs_to_tie(0) { }
 
   void Register(OptionsItf *opts) {
     nnet_config.Register(opts);
@@ -44,6 +48,12 @@ struct NnetChainTrainingOptions {
     opts->Register("apply-deriv-weights", &apply_deriv_weights,
                    "If true, apply the per-frame derivative weights stored with "
                    "the example");
+    opts->Register("num-phone-sets", &num_phone_sets, "Number of phone sets -- "
+                   "used for tying");
+    opts->Register("num-pdfs-to-tie", &num_pdfs_to_tie, "Number of pdfs to tie "
+                   "at the end of this iteration");
+    opts->Register("write-pdf-map-filename", &write_pdf_map_filename, "filename "
+                   "to write the pdf tying map.");
   }
 };
 
@@ -67,6 +77,10 @@ class NnetChainTrainer {
   // Prints out the max-change stats (if nonzero): the percentage of time that
   // per-component max-change and global max-change were enforced.
   void PrintMaxChangeStats() const;
+
+
+  // #pdf_tying
+  void DoPdfTying() const;
 
   ~NnetChainTrainer();
  private:
@@ -99,6 +113,16 @@ class NnetChainTrainer {
   int32 num_max_change_global_applied_;
 
   unordered_map<std::string, ObjectiveFunctionInfo, StringHasher> objf_info_;
+
+  // This is only used if we are collecting stats for #pdf_tying which is when
+  // opts.num_pdfs_to_tie is set to some positive integer
+  // This will store for each pdf pair, the total distance between their
+  // posterior probabilities for all the frames processed in 1 iteration of
+  // chain training
+  //  unordered_map<std::pair<int32, int32>, BaseFloat, PairHasher<int32> >
+  std::map<std::pair<int32, int32>, BaseFloat>
+  pdf_pair_distance_;
+  int32 num_frames_processed_;
 };
 
 

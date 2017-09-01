@@ -67,6 +67,42 @@ int main(int argc, char *argv[]) {
       exit(1);
     }
 
+    // This relates to #pdf_tying
+    if (!chain_config.pdf_map_filename.empty()) {
+      std::ifstream fs(chain_config.pdf_map_filename);
+      ReadIntegerVector(fs, false, &(chain_config.pdf_map));
+      KALDI_LOG << "read pdf map. size: " << chain_config.pdf_map.size()
+                << "\tmap[0]=" << chain_config.pdf_map[0];
+    }
+    // This relates to transition training
+    if (!chain_config.trans_probs_filename.empty()) {
+      ReadKaldiObject(chain_config.trans_probs_filename,
+                      &(chain_config.trans_probs));
+      for (int32 i = 0; i < chain_config.trans_probs.Dim(); i += 2) {
+        BaseFloat sum = (chain_config.trans_probs(i) +
+                         chain_config.trans_probs(i + 1));
+        chain_config.trans_probs(i) /= sum;
+        chain_config.trans_probs(i + 1) /= sum;
+        BaseFloat p = chain_config.min_transition_prob;
+        if (std::min(chain_config.trans_probs(i),
+                     chain_config.trans_probs(i + 1))
+            < p) {
+          if (chain_config.trans_probs(i)
+              < chain_config.trans_probs(i + 1)) {
+            chain_config.trans_probs(i) = p;
+            chain_config.trans_probs(i + 1) = 1.0 - p;
+          } else {
+            chain_config.trans_probs(i) = 1.0 - p;
+            chain_config.trans_probs(i + 1) = p;
+          }
+        }
+      }
+      KALDI_LOG << "Transitions probs:";
+      chain_config.trans_probs.Write(std::cerr, false);
+      chain_config.trans_probs.ApplyLog();
+    }
+
+
 #if HAVE_CUDA==1
     CuDevice::Instantiate().SelectGpuId(use_gpu);
 #endif

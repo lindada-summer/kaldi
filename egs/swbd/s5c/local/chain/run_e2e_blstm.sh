@@ -43,7 +43,7 @@ den_use_initials=false
 den_use_finals=true
 slc=1.0
 shared_phones=true
-train_set=train_nodup_seg_spEx
+train_set=train_nodup_seg_spEx_hires
 topo_affix=_chain
 tree_affix=_dataEx1-shared-tr1sl1
 topo_opts=
@@ -51,6 +51,7 @@ uniform_lexicon=false
 first_layer_splice=0
 disable_ng=false
 final_layer_normalize_target=0.5
+dbl_chk=false
 
 # End configuration section.
 echo "$0 $@"  # Print the command line for logging
@@ -162,7 +163,7 @@ if [ $stage -le 13 ]; then
     --egs.opts "--normalize-egs false" \
     --egs.chunk-left-context $chunk_left_context \
     --egs.chunk-right-context $chunk_right_context \
-    --trainer.options="--compiler.cache-capacity=512 --den-use-initials=$den_use_initials --den-use-finals=$den_use_finals" \
+    --trainer.options="--compiler.cache-capacity=512 --den-use-initials=$den_use_initials --den-use-finals=$den_use_finals --check-derivs=$dbl_chk" \
     --trainer.no-mmi-percent $no_mmi_percent \
     --trainer.equal-align-iters $equal_align_iters \
     --trainer.num-chunk-per-minibatch $minibatch_size \

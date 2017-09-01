@@ -66,6 +66,15 @@ int main(int argc, char *argv[]) {
       exit(1);
     }
 
+    // This relates to #pdf_tying
+    if (!chain_opts.pdf_map_filename.empty()) {
+      std::ifstream fs(chain_opts.pdf_map_filename);
+      ReadIntegerVector(fs, false, &(chain_opts.pdf_map));
+      KALDI_LOG << "read pdf map. size: " << chain_opts.pdf_map.size()
+                << "\tmap[0]=" << chain_opts.pdf_map[0];
+    }
+
+
     std::string nnet_rxfilename = po.GetArg(1),
         den_fst_rxfilename = po.GetArg(2),
         examples_rspecifier = po.GetArg(3);

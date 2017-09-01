@@ -43,6 +43,10 @@ NnetChainTrainer::NnetChainTrainer(const NnetChainTrainingOptions &opts,
   num_max_change_per_component_applied_.resize(num_updatable, 0);
   num_max_change_global_applied_ = 0;
 
+  num_frames_processed_ = 0;  // for #pdf_tying
+  if (!opts_.chain_config.pdf_map_filename.empty())
+    den_graph_.MapPdfs(opts_.chain_config.pdf_map);
+
   if (opts.nnet_config.read_cache != "") {
     bool binary;
     try {
@@ -80,6 +84,80 @@ void NnetChainTrainer::Train(const NnetChainExample &chain_eg) {
   UpdateParamsWithMaxChange();
 }
 
+void NnetChainTrainer::DoPdfTying() const {
+  // copy all the distances into a list so we can sort it by
+  // distance. normalize the distances while doing this --> for debugging mostly
+
+  //  std::vector<std::tuple<int32, int32, BaseFloat> > >
+  //      distances(pdf_pair_distance_.size());
+  std::vector<std::pair<std::pair<int32, int32>, BaseFloat> >
+      distances(pdf_pair_distance_.size());
+  int k = 0;
+  for (auto it = pdf_pair_distance_.begin();
+       it != pdf_pair_distance_.end(); ++it, k++) {
+    BaseFloat distance = it->second;
+    distance = sqrt(distance / num_frames_processed_);
+    distances[k] = std::make_pair(it->first, distance);
+  }
+  struct {
+    bool operator() (const std::pair<std::pair<int32, int32>, BaseFloat> &left,
+                     const std::pair<std::pair<int32, int32>, BaseFloat> &right) const {
+      return left.second < right.second;
+    }
+  } lowest_to_highest_distance;
+  std::sort(distances.begin(), distances.end(), lowest_to_highest_distance);
+  // print some of them for debugging...
+  for (int32 i = 0; i < 100; i++) {
+    std::cerr << "Distances[" << i << "]: " << distances[i].second
+              << " -->  (" << distances[i].first.first << ", "
+              << distances[i].first.second << ")\n";
+  }
+
+  // select opts.num_pdfs_to_tie of them to tie
+  int32 num_pdfs = opts_.num_phone_sets * (opts_.num_phone_sets + 1);
+  KALDI_ASSERT(num_pdfs == nnet_->OutputDim("output"));
+  std::vector<int32> pdf_map(opts_.chain_config.pdf_map);
+  if (pdf_map.size() == 0) {
+    pdf_map.resize(num_pdfs);
+    for (int32 i = 0; i < num_pdfs; i++)
+      pdf_map[i] = i;
+  }
+  for (int32 i = 0; i < opts_.num_pdfs_to_tie; i++) {
+    int32 n = distances[i].first.first;
+    int32 m = distances[i].first.second;
+    m = pdf_map[m];
+    n = pdf_map[n];
+    // make sure m < n
+    if (n > m) std::swap(m, n);
+    pdf_map[m] = n;  // tie (always map the larger pdf id to the smaller one)
+
+    // m was mapped to n, so map to n, anything that's mapped to m
+    for (int32 i = 0; i < num_pdfs; i++)
+      if (pdf_map[i] == m)
+        pdf_map[i] = n;
+  }
+  std::unordered_set<int32> unique_pdfs;
+  for (int32 i = 0; i < num_pdfs; i++)
+    unique_pdfs.insert(pdf_map[i]);
+  KALDI_LOG << "Number of unique pdf ids after tying:" << unique_pdfs.size();
+  // do a check
+  for (int32 i = 0; i < num_pdfs; i++)
+    if (pdf_map[pdf_map[i]] != pdf_map[i])
+      std::cerr << "Error: " << i << std::endl;
+
+  k = 0;
+  std::vector<int32> map2(num_pdfs, -1);
+  for (int32 i = 0; i < num_pdfs; i++) {
+    if (map2[pdf_map[i]] == -1)
+      map2[pdf_map[i]] = k++;
+    pdf_map[i] = map2[pdf_map[i]];
+  }
+
+  std::ofstream of(opts_.write_pdf_map_filename);
+  WriteIntegerVector(of, false, pdf_map);
+  of << "<NumPdfs> " << k << "\n";
+}
+
 
 void NnetChainTrainer::ProcessOutputs(const NnetChainExample &eg,
                                       NnetComputer *computer) {
@@ -95,6 +173,55 @@ void NnetChainTrainer::ProcessOutputs(const NnetChainExample &eg,
       KALDI_ERR << "Network has no output named " << sup.name;
 
     const CuMatrixBase<BaseFloat> &nnet_output = computer->GetOutput(sup.name);
+
+    if (opts_.num_pdfs_to_tie != 0) { // collect stats for #pdf_tying
+      KALDI_ASSERT(opts_.num_phone_sets > 0);
+      KALDI_ASSERT(!opts_.write_pdf_map_filename.empty());
+      num_frames_processed_ += nnet_output.NumRows();
+      unordered_set<std::pair<int32, int32>, PairHasher<int32> > pdf_pair_done;
+
+      for (int32 phone_set_index = 0; phone_set_index < opts_.num_phone_sets;
+           phone_set_index++) {
+        int32 stride = opts_.num_phone_sets + 1;
+        // for each phone_set we have a subtree (EventMap) which has
+        // a total of "stride" leaves. We will measure the distance between any
+        // two of these leaves.
+        for (int32 i = phone_set_index * stride;
+             i < (phone_set_index + 1) * stride;
+             i++) {
+          for (int32 j = i + 1; j < (phone_set_index + 1) * stride; j++) {
+            if (opts_.chain_config.pdf_map.size() != 0) {
+              i = opts_.chain_config.pdf_map[i];
+              j = opts_.chain_config.pdf_map[j];
+            }
+            // make sure i < j (this could happen if there is already some tying in effect)
+            if (i > j) std::swap(i, j);
+            auto pdf_pair = std::make_pair(i, j);
+            if (pdf_pair_done.count(pdf_pair) || i == j)
+              continue;
+            pdf_pair_done.insert(pdf_pair);
+            // for now, we define the distance to be euclidean distance
+            // measure distance between columns i and j of nnet_output
+            CuVector<BaseFloat> diff(nnet_output.NumRows(), kUndefined),
+                vec_j(nnet_output.NumRows(), kUndefined);
+            diff.CopyColFromMat(nnet_output, i);
+            vec_j.CopyColFromMat(nnet_output, j);
+            diff.AddVec(-1.0, vec_j, 1.0);
+            pdf_pair_distance_[pdf_pair] += diff.Norm(2.0);
+          }
+        }
+      }
+
+      //      int i = 0;
+      // for (auto it = pdf_pair_distance_.begin();
+      //   it != pdf_pair_distance_.end() && i < 10; ++it, i++) {
+      //std::cerr << it->second
+      //          << " -->  (" << it->first.first << ", "
+      //          << it->first.second << ")\n";
+      //}
+
+    }
+
     CuMatrix<BaseFloat> nnet_output_deriv(nnet_output.NumRows(),
                                           nnet_output.NumCols(),
                                           kUndefined);
@@ -279,6 +406,8 @@ void NnetChainTrainer::PrintMaxChangeStats() const {
 }
 
 NnetChainTrainer::~NnetChainTrainer() {
+  if (opts_.num_pdfs_to_tie != 0)
+    DoPdfTying();
   if (opts_.nnet_config.write_cache != "") {
     Output ko(opts_.nnet_config.write_cache, opts_.nnet_config.binary_write_cache);
     compiler_.WriteCache(ko.Stream(), opts_.nnet_config.binary_write_cache);

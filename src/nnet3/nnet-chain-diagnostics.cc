@@ -36,6 +36,11 @@ NnetChainComputeProb::NnetChainComputeProb(
     deriv_nnet_owned_(true),
     deriv_nnet_(NULL),
     num_minibatches_processed_(0) {
+
+  // This relates to #pdf_tying
+  if (!chain_config.pdf_map_filename.empty())
+    den_graph_.MapPdfs(chain_config.pdf_map);
+
   if (nnet_config_.compute_deriv) {
     deriv_nnet_ = new Nnet(nnet_);
     ScaleNnet(0.0, deriv_nnet_);
@@ -61,6 +66,11 @@ NnetChainComputeProb::NnetChainComputeProb(
     deriv_nnet_(nnet),
     num_minibatches_processed_(0) {
   KALDI_ASSERT(nnet_config.store_component_stats && !nnet_config.compute_deriv);
+
+  // This relates to #pdf_tying
+  if (!chain_config.pdf_map_filename.empty())
+    den_graph_.MapPdfs(chain_config.pdf_map);
+
 }
 
 

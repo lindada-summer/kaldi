@@ -570,7 +570,9 @@ def train(args, run_opts):
             xent_regularize=args.xent_regularize,
             run_opts=run_opts,
             sum_to_one_penalty=args.combine_sum_to_one_penalty,
-            comb_opts='--disable-mmi={}'.format(disable_mmi))
+            comb_opts='--disable-mmi={} --trans-probs-filename={}/percent-{}.stats --min-transition-prob={}'.format(
+                disable_mmi, stats_dir,
+                100-args.transition_probs_update_interval, args.min_transition_prob))
 
     if args.stage <= num_iters + 1:
         logger.info('Adjusting priors to act as transition probs')

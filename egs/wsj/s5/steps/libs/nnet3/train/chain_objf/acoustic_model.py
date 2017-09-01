@@ -180,7 +180,7 @@ def train_new_models(dir, iter, srand, num_jobs,
                      momentum, max_param_change,
                      shuffle_buffer_size, num_chunk_per_minibatch_str,
                      frame_subsampling_factor,
-                     run_opts, chain_train_opts):
+                     run_opts, chain_train_opts, chain_train_only1job_opts):
     """
     Called from train_one_iteration(), this method trains new models
     with 'num_jobs' jobs, and
@@ -223,10 +223,11 @@ def train_new_models(dir, iter, srand, num_jobs,
                           if iter > 0 else "") +
                          (" --write-cache={0}/cache.{1}".format(dir, iter + 1)
                           if job == 1 else ""))
-
+        if job != 1: chain_train_only1job_opts = ''
         thread = common_lib.background_command(
             """{command} {train_queue_opt} {dir}/log/train.{iter}.{job}.log \
-                    nnet3-chain-train {chain_train_opts} {parallel_train_opts} {verbose_opt} \
+                    nnet3-chain-train {chain_train_opts} {only1job} \
+                    {parallel_train_opts} {verbose_opt} \
                     --apply-deriv-weights={app_deriv_wts} \
                     --l2-regularize={l2} --leaky-hmm-coefficient={leaky} \
                     {cache_io_opts}  --xent-regularize={xent_reg} \
@@ -257,7 +258,7 @@ def train_new_models(dir, iter, srand, num_jobs,
                         egs_dir=egs_dir, archive_index=archive_index,
                         buf_size=shuffle_buffer_size,
                         num_chunk_per_mb=num_chunk_per_minibatch_str,
-                        chain_train_opts=chain_train_opts),
+                        chain_train_opts=chain_train_opts, only1job=chain_train_only1job_opts),
             require_zero_status=True)
 
         threads.append(thread)
@@ -278,7 +279,8 @@ def train_one_iteration(dir, iter, srand, egs_dir,
                         leaky_hmm_coefficient,
                         momentum, max_param_change, shuffle_buffer_size,
                         frame_subsampling_factor,
-                        run_opts, dropout_edit_string="", chain_train_opts=''):
+                        run_opts, dropout_edit_string="", chain_train_opts='',
+                        chain_train_only1job_opts=''):
     """ Called from steps/nnet3/chain/train.py for one iteration for
     neural network training with LF-MMI objective
 
@@ -362,7 +364,8 @@ def train_one_iteration(dir, iter, srand, egs_dir,
                      shuffle_buffer_size=shuffle_buffer_size,
                      num_chunk_per_minibatch_str=cur_num_chunk_per_minibatch_str,
                      frame_subsampling_factor=frame_subsampling_factor,
-                     run_opts=run_opts, chain_train_opts=chain_train_opts)
+                     run_opts=run_opts, chain_train_opts=chain_train_opts,
+                     chain_train_only1job_opts=chain_train_only1job_opts)
 
     [models_to_average, best_model] = common_train_lib.get_successful_models(
          num_jobs, '{0}/log/train.{1}.%.log'.format(dir, iter))
@@ -406,7 +409,7 @@ def check_for_required_files(feat_dir, tree_dir, lat_dir):
     files = ['{0}/feats.scp'.format(feat_dir), '{0}/ali.1.gz'.format(tree_dir),
              '{0}/final.mdl'.format(tree_dir), '{0}/tree'.format(tree_dir),
              '{0}/lat.1.gz'.format(lat_dir), '{0}/final.mdl'.format(lat_dir),
-             '{0}/num_jobs'.format(lat_dir), '{0}/splice_opts'.format(lat_dir)]
+             '{0}/num_jobs'.format(lat_dir)]
     for file in files:
         if not os.path.isfile(file):
             raise Exception('Expected {0} to exist.'.format(file))

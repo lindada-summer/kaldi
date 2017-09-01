@@ -43,6 +43,15 @@ namespace chain {
 class NumeratorGraph {
  public:
 
+  // This relates to #pdf_tying
+  void MapPdfs(const std::vector<int32>& pdf_map) {
+    // KALDI_ASSERT(pdf_map.size() == num_pdfs_);
+    for (int32 tr = 0; tr < transitions_.size(); tr++) {
+      transitions_[tr].pdf_id = pdf_map[transitions_[tr].pdf_id];
+    }
+  }
+
+
   int32 NumSequences() const { return num_sequences_; }
 
   // the number of PDFs (the labels on the transitions are numbered from 0 to

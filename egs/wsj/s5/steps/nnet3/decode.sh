@@ -34,6 +34,8 @@ feat_type=
 online_ivector_dir=
 minimize=false
 add_deltas=false
+nnet3_latgen_opts=
+
 # End configuration section.
 
 echo "$0 $@"  # Print the command line for logging
@@ -157,6 +159,7 @@ fi
 if [ $stage -le 1 ]; then
   $cmd --num-threads $num_threads JOB=1:$nj $dir/log/decode.JOB.log \
     nnet3-latgen-faster$thread_string $ivector_opts $frame_subsampling_opt \
+     $nnet3_latgen_opts \
      --frames-per-chunk=$frames_per_chunk \
      --extra-left-context=$extra_left_context \
      --extra-right-context=$extra_right_context \

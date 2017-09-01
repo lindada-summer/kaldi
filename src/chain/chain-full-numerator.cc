@@ -62,12 +62,20 @@ FullNumeratorComputation::FullNumeratorComputation(
                                                                   vector<int32>(num_graph_.MaxNumStates(), -1)));
   }
   KALDI_ASSERT(nnet_output.NumRows() % num_sequences_ == 0);
-  if (opts.trans_probs.Dim() != 0) {
+  if (!opts.trans_probs_filename.empty()) {
     KALDI_ASSERT(opts.trans_probs.Dim() == exp_nnet_output_transposed_.NumRows());
     // opts.trans_prob is in log space
     exp_nnet_output_transposed_.AddVecToCols(1.0, opts.trans_probs);
   }
   exp_nnet_output_transposed_.ApplyExp();
+
+  for (int32 i = 0; i < opts.pdf_map.size(); i++) {
+    if (opts.pdf_map[i] != i) {
+      KALDI_LOG << "pdf_id " << i << " is mapped to " << opts.pdf_map[i];
+      //some_pdf = i;
+      break;
+    }
+  }
 }
 
 // TODO: merge this with the current Forward/Backward functions --> more elagant

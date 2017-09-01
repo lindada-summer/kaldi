@@ -53,6 +53,18 @@ namespace chain {
 class DenominatorGraph {
  public:
 
+  // This relates to #pdf_tying
+  void MapPdfs(const std::vector<int32>& pdf_map) {
+    // KALDI_ASSERT(pdf_map.size() == num_pdfs_); not true if we change the output dim
+    std::vector<DenominatorGraphTransition> cpu;
+    transitions_.CopyToVec(&cpu);
+    for (int32 tr = 0; tr < transitions_.Dim(); tr++) {
+      cpu[tr].pdf_id = pdf_map[cpu[tr].pdf_id];
+    }
+    transitions_.CopyFromVec(cpu);
+  }
+
+
   // the number of states in the HMM.
   int32 NumStates() const;
 

@@ -58,6 +58,15 @@ int main(int argc, char *argv[]) {
       exit(1);
     }
 
+    // This relates to #pdf_tying
+    if (!opts.chain_config.pdf_map_filename.empty()) {
+      std::ifstream fs(opts.chain_config.pdf_map_filename);
+      ReadIntegerVector(fs, false, &(opts.chain_config.pdf_map));
+      KALDI_LOG << "read pdf map. size: " << opts.chain_config.pdf_map.size()
+                << "\tmap[0]=" << opts.chain_config.pdf_map[0];
+    }
+
+    // This relates to transition training
     if (!opts.chain_config.trans_probs_filename.empty()) {
       ReadKaldiObject(opts.chain_config.trans_probs_filename,
                       &(opts.chain_config.trans_probs));

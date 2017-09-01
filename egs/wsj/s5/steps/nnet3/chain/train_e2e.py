@@ -119,6 +119,9 @@ def get_args():
     parser.add_argument("--trainer.equal-align-iters", type=int, dest='equal_align_iters',
                         default=1000,
                         help="Number of iters to do training with EqaulAlign enabled")
+    parser.add_argument("--trainer.n-tie", type=int, dest='n_tie',
+                        default=0,
+                        help="Number of PDFs to tie")
 
     parser.add_argument("--trainer.frames-per-iter", type=int,
                         dest='frames_per_iter', default=800000,
@@ -473,6 +476,15 @@ def train(args, run_opts):
                                         args.shrink_saturation_threshold)
                                    else shrinkage_value)
 
+            chain_opts = (args.chain_train_opts +
+                          ' --disable-mmi={} --viterbi={} --equal-align={}'.format(
+                              disable_mmi, not disable_viterbi, equal_align))
+
+            chain_only1job_opts = ''
+            if args.n_tie != 0 and iter == 75:
+                chain_only1job_opts += " --write-pdf-map-filename={}/pdf-map.txt --num-pdfs-to-tie={} --num-phone-sets=46".format(args.dir, args.n_tie)
+            if args.n_tie != 0 and iter > 75:
+                chain_opts += " --pdf-map-filename={}/pdf-map.txt".format(args.dir)
             chain_lib.train_one_iteration(
                 dir=args.dir,
                 iter=iter,
@@ -499,9 +511,13 @@ def train(args, run_opts):
                 shuffle_buffer_size=args.shuffle_buffer_size,
                 frame_subsampling_factor=args.frame_subsampling_factor,
                 run_opts=run_opts,
-                chain_train_opts=(args.chain_train_opts +
-                  ' --disable-mmi={} --viterbi={} --equal-align={}'.format(
-                                                     disable_mmi, not disable_viterbi, equal_align)))
+                chain_train_opts=chain_opts,
+                chain_train_only1job_opts=chain_only1job_opts)
+
+            #if args.n_tie != 0 and iter == 75:
+                # pdf-map.txt is written. Read the new number of
+                # pdfs from it and update the network.
+
 
 
             if args.cleanup:
@@ -539,7 +555,7 @@ def train(args, run_opts):
             xent_regularize=args.xent_regularize,
             run_opts=run_opts,
             sum_to_one_penalty=args.combine_sum_to_one_penalty,
-            comb_opts='--disable-mmi={}'.format(disable_mmi))
+            comb_opts='--disable-mmi={} --pdf-map-filename={}/pdf-map.txt'.format(disable_mmi, args.dir))
 
 
     if args.cleanup:

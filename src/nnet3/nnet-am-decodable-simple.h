@@ -53,6 +53,9 @@ struct NnetSimpleComputationOptions {
   NnetComputeOptions compute_config;
   CachingOptimizingCompilerOptions compiler_config;
 
+  std::string pdf_map_filename;
+  std::vector<int32> pdf_map;
+
   NnetSimpleComputationOptions():
       extra_left_context(0),
       extra_right_context(0),
@@ -93,6 +96,7 @@ struct NnetSimpleComputationOptions {
                    "input frames");
     opts->Register("debug-computation", &debug_computation, "If true, turn on "
                    "debug for the actual computation (very verbose!)");
+    opts->Register("pdf-map-filename", &pdf_map_filename, "Path to a pdf map file -- for #pdf_tying");
 
     // register the optimization options with the prefix "optimization".
     ParseOptions optimization_opts("optimization", opts);
@@ -175,6 +179,12 @@ class DecodableNnetSimple {
         subsampled_frame >= current_log_post_subsampled_offset_ +
                             current_log_post_.NumRows())
       EnsureFrameIsComputed(subsampled_frame);
+    if (!opts_.pdf_map_filename.empty()) { // handle #pdf_tying
+      int32 old_id = pdf_id;
+      pdf_id = opts_.pdf_map[pdf_id];
+      if (pdf_id != old_id && WithProb(0.001))
+        KALDI_LOG << "pdf_id " << old_id << " was mapped to " << pdf_id;
+    }
     return current_log_post_(subsampled_frame -
                              current_log_post_subsampled_offset_,
                              pdf_id);

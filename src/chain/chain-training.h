@@ -71,11 +71,16 @@ struct ChainTrainingOptions {
   Vector<BaseFloat> trans_probs;
   BaseFloat min_transition_prob;
 
+  std::string pdf_map_filename;
+  std::vector<int32> pdf_map;
+
+  bool  offset_first_transitions;
   ChainTrainingOptions(): l2_regularize(0.0), leaky_hmm_coefficient(1.0e-05),
                           xent_regularize(0.0), disable_mmi(false),
                           equal_align(true), den_use_initials (true),
                           den_use_finals (false), viterbi(false),
-                          check_derivs(false), min_transition_prob(0.0) { }
+                          check_derivs(false), min_transition_prob(0.0),
+                          offset_first_transitions(false) { }
 
   void Register(OptionsItf *opts) {
     opts->Register("l2-regularize", &l2_regularize, "l2 regularization "
@@ -101,6 +106,8 @@ struct ChainTrainingOptions {
     opts->Register("trans-probs-filename", &trans_probs_filename, "Double check the derivatives");
     opts->Register("write-trans-stats-prefix", &write_trans_stats_prefix, "Double check the derivatives");
     opts->Register("min-transition-prob", &min_transition_prob, "Minimum transition prob for when transition probs are used");
+    opts->Register("pdf-map-filename", &pdf_map_filename, "Path to a pdf map file -- for #pdf_tying");
+    opts->Register("offset-first-transitions", &offset_first_transitions, "Offset first transitions in num computation");
   }
 };
 
