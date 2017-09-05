@@ -343,10 +343,10 @@ def train_one_iteration(dir, iter, srand, egs_dir,
     if shrinkage_value != 1.0:
         shrink_info_str = ' and shrink value is {0}'.format(shrinkage_value)
 
-    logger.info("On iteration {0}, learning rate is {1}"
-                "{shrink_info}.".format(
-                    iter, learning_rate,
-                    shrink_info=shrink_info_str))
+    #logger.info("On iteration {0}, learning rate is {1}"
+    #            "{shrink_info}.".format(
+    #                iter, learning_rate,
+    #                shrink_info=shrink_info_str))
 
     train_new_models(dir=dir, iter=iter, srand=srand, num_jobs=num_jobs,
                      num_archives_processed=num_archives_processed,
@@ -583,7 +583,7 @@ def combine_models(dir, num_iters, models_to_combine, num_chunk_per_minibatch_st
                 --sum-to-one-penalty={penalty} \
                 --enforce-positive-weights=true \
                 --verbose=3 {dir}/den.fst {raw_models} \
-                "ark,bg:nnet3-chain-copy-egs ark:{egs_dir}/combine.cegs ark:- | \
+                "ark,bg:nnet3-chain-copy-egs ark:{egs_dir}/train_subset_all.cegs ark:- | \
                     nnet3-chain-merge-egs --minibatch-size={num_chunk_per_mb} \
                     ark:- ark:- |" - \| \
                 nnet3-am-copy --set-raw-nnet=- {dir}/{num_iters}.mdl \

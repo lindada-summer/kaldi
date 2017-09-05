@@ -65,25 +65,60 @@ EventMap
       }
     }
   }
+  int32 numpdfs_per_phone = phone2num_pdf_classes[1];
+
   int32 current_pdfid = 0;
 
   std::map<EventValueType, EventMap*> level1_map; // key is 1
   for (size_t i = 0; i < phone_sets.size(); i++) {
 
-    // create an event map for level2:
-    std::map<EventValueType, EventAnswerType> level2_map; // key is 0
-    level2_map[0] = current_pdfid++; // no-left-context case
-    for (size_t j = 0; j < phone_sets.size(); j++) {
-      int32 pdfid = current_pdfid++;
-      std::vector<int32> pset = phone_sets[j]; // all these will have a shared pdf with id=pdfid
+    if (numpdfs_per_phone == 1) {
+      // create an event map for level2:
+      std::map<EventValueType, EventAnswerType> level2_map; // key is 0
+      level2_map[0] = current_pdfid++; // no-left-context case
+      for (size_t j = 0; j < phone_sets.size(); j++) {
+        int32 pdfid = current_pdfid++;
+        std::vector<int32> pset = phone_sets[j]; // all these will have a
+                                                 // shared pdf with id=pdfid
+        for (size_t k = 0; k < pset.size(); k++)
+          level2_map[pset[k]] = pdfid;
+      }
+      std::vector<int32> pset = phone_sets[i]; // all these will have a
+      // shared event-map child
+      //EventMap* lvl2_eventmap =
       for (size_t k = 0; k < pset.size(); k++)
-        level2_map[pset[k]] = pdfid;
-    }
+        level1_map[pset[k]] = new TableEventMap(0, level2_map);
 
-    std::vector<int32> pset = phone_sets[i]; // all these will have a shared event-map child
-    EventMap* lvl2_eventmap = new TableEventMap(0, level2_map);
-    for (size_t k = 0; k < pset.size(); k++)
-      level1_map[pset[k]] = lvl2_eventmap;
+    } else {
+
+      KALDI_ASSERT(numpdfs_per_phone == 2);
+      int32 base_pdfid = current_pdfid;
+      std::vector<int32> pset = phone_sets[i]; // all these will have a shared event-map child
+      for (size_t k = 0; k < pset.size(); k++) {
+        // create an event map for level2:
+        std::map<EventValueType, EventMap*> level2_map; // key is 0
+        {
+          std::map<EventValueType, EventAnswerType> level3_map; // key is -1
+          level3_map[0] = current_pdfid++;
+          level3_map[1] = current_pdfid++;
+          level2_map[0] = new TableEventMap(kPdfClass, level3_map); // no-left-context case
+        }
+        for (size_t j = 0; j < phone_sets.size(); j++) {
+          std::map<EventValueType, EventAnswerType> level3_map; // key is -1
+          level3_map[0] = current_pdfid++;
+          level3_map[1] = current_pdfid++;
+
+          std::vector<int32> ipset = phone_sets[j]; // all these will have a shared subtree with 2 pdfids
+          for (size_t ik = 0; ik < ipset.size(); ik++) {
+            level2_map[ipset[ik]] = new TableEventMap(kPdfClass, level3_map);
+          }
+        }
+        level1_map[pset[k]] = new TableEventMap(0, level2_map); //lvl2_eventmap;
+        if (k != pset.size() - 1)
+          current_pdfid = base_pdfid;
+      } /////////   k
+
+    }
   }
 
   return new TableEventMap(1, level1_map);
@@ -149,8 +184,9 @@ int main(int argc, char *argv[]) {
     std::vector<int32> phone2num_pdf_classes (1 + phones.back());
     for (size_t i = 0; i < phones.size(); i++) {
       phone2num_pdf_classes[phones[i]] = topo.NumPdfClasses(phones[i]);
-      // for now we only support 1 pdf per phone
-      KALDI_ASSERT(phone2num_pdf_classes[phones[i]] == 1);
+      // for now we only support 1 or 2 pdf per phone
+      KALDI_ASSERT(phone2num_pdf_classes[phones[i]] == 1 ||
+                   phone2num_pdf_classes[phones[i]] == 2);
     }
 
     // Now the tree:

@@ -38,9 +38,11 @@ struct NnetChainTrainingOptions {
   bool apply_deriv_weights;
   int32 num_phone_sets, num_pdfs_to_tie;
   std::string write_pdf_map_filename;
+  int32 num_pdfs_per_phone;
   NnetChainTrainingOptions(): apply_deriv_weights(true),
                               num_phone_sets(0),
-                              num_pdfs_to_tie(0) { }
+                              percent_pdfs_to_tie(0),
+                              num_pdfs_per_phone(1) { }
 
   void Register(OptionsItf *opts) {
     nnet_config.Register(opts);
@@ -50,10 +52,14 @@ struct NnetChainTrainingOptions {
                    "the example");
     opts->Register("num-phone-sets", &num_phone_sets, "Number of phone sets -- "
                    "used for tying");
-    opts->Register("num-pdfs-to-tie", &num_pdfs_to_tie, "Number of pdfs to tie "
+    opts->Register("percent-pdfs-to-tie", &percent_pdfs_to_tie,
+                   "Percentage of pdfs to tie "
                    "at the end of this iteration");
-    opts->Register("write-pdf-map-filename", &write_pdf_map_filename, "filename "
-                   "to write the pdf tying map.");
+    opts->Register("write-pdf-map-filename", &write_pdf_map_filename,
+                   "filename to write the pdf tying map.");
+    opts->Register("num-pdfs-per-phone", &num_pdfs_per_phone,
+                   "Number of pdfs in "
+                   "each phone according to the topo");
   }
 };
 

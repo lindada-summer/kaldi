@@ -113,7 +113,7 @@ void NnetChainTrainer::DoPdfTying() const {
               << distances[i].first.second << ")\n";
   }
 
-  // select opts.num_pdfs_to_tie of them to tie
+  // select opts.percent_pdfs_to_tie of them to tie
   int32 num_pdfs = opts_.num_phone_sets * (opts_.num_phone_sets + 1);
   KALDI_ASSERT(num_pdfs == nnet_->OutputDim("output"));
   std::vector<int32> pdf_map(opts_.chain_config.pdf_map);
@@ -122,7 +122,8 @@ void NnetChainTrainer::DoPdfTying() const {
     for (int32 i = 0; i < num_pdfs; i++)
       pdf_map[i] = i;
   }
-  for (int32 i = 0; i < opts_.num_pdfs_to_tie; i++) {
+  int32 num_pairs_to_tie = opts_.percent_pdfs_to_tie * distances.size();
+  for (int32 i = 0; i < num_pairs_to_tie; i++) {
     int32 n = distances[i].first.first;
     int32 m = distances[i].first.second;
     m = pdf_map[m];
@@ -177,12 +178,14 @@ void NnetChainTrainer::ProcessOutputs(const NnetChainExample &eg,
     if (opts_.num_pdfs_to_tie != 0) { // collect stats for #pdf_tying
       KALDI_ASSERT(opts_.num_phone_sets > 0);
       KALDI_ASSERT(!opts_.write_pdf_map_filename.empty());
+      KALDI_ASSERT(opts_.num_pdfs_per_phone == 1 ||
+                   opts_.num_pdfs_per_phone == 2);
       num_frames_processed_ += nnet_output.NumRows();
       unordered_set<std::pair<int32, int32>, PairHasher<int32> > pdf_pair_done;
 
       for (int32 phone_set_index = 0; phone_set_index < opts_.num_phone_sets;
            phone_set_index++) {
-        int32 stride = opts_.num_phone_sets + 1;
+        int32 stride = (opts_.num_phone_sets + 1) * opts_.num_pdfs_per_phone;
         // for each phone_set we have a subtree (EventMap) which has
         // a total of "stride" leaves. We will measure the distance between any
         // two of these leaves.
@@ -406,7 +409,7 @@ void NnetChainTrainer::PrintMaxChangeStats() const {
 }
 
 NnetChainTrainer::~NnetChainTrainer() {
-  if (opts_.num_pdfs_to_tie != 0)
+  if (opts_.percent_pdfs_to_tie != 0)
     DoPdfTying();
   if (opts_.nnet_config.write_cache != "") {
     Output ko(opts_.nnet_config.write_cache, opts_.nnet_config.binary_write_cache);

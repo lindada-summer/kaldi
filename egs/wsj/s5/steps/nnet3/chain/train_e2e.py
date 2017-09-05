@@ -122,6 +122,10 @@ def get_args():
     parser.add_argument("--trainer.n-tie", type=int, dest='n_tie',
                         default=0,
                         help="Number of PDFs to tie")
+    parser.add_argument("--trainer.tie-info", type=str, dest='tie_info',
+                        default="",
+                        help="Tying info like number of phone sets, etc.")
+
 
     parser.add_argument("--trainer.frames-per-iter", type=int,
                         dest='frames_per_iter', default=800000,
@@ -456,6 +460,7 @@ def train(args, run_opts):
                                * float(iter) / num_iters)
 
         if args.stage <= iter:
+            logger.info("Iter: {}/{}      Percent complete: {}".format(iter, num_iters-1, percent))
             model_file = "{dir}/{iter}.mdl".format(dir=args.dir, iter=iter)
 
             lrate = common_train_lib.get_learning_rate(iter, current_num_jobs,
@@ -482,9 +487,13 @@ def train(args, run_opts):
 
             chain_only1job_opts = ''
             if args.n_tie != 0 and iter == 75:
-                chain_only1job_opts += " --write-pdf-map-filename={}/pdf-map.txt --num-pdfs-to-tie={} --num-phone-sets=46".format(args.dir, args.n_tie)
+                chain_only1job_opts += (" --write-pdf-map-filename={}/"
+                                        "pdf-map.txt --percent-pdfs-to-tie={} "
+                                        "{}".format(
+                                            args.dir, args.n_tie, args.tie_info))
             if args.n_tie != 0 and iter > 75:
-                chain_opts += " --pdf-map-filename={}/pdf-map.txt".format(args.dir)
+                chain_opts += " --pdf-map-filename={}/pdf-map.txt".format(
+                    args.dir)
             chain_lib.train_one_iteration(
                 dir=args.dir,
                 iter=iter,
@@ -514,9 +523,14 @@ def train(args, run_opts):
                 chain_train_opts=chain_opts,
                 chain_train_only1job_opts=chain_only1job_opts)
 
-            #if args.n_tie != 0 and iter == 75:
+            if args.n_tie != 0 and iter == 75:
                 # pdf-map.txt is written. Read the new number of
                 # pdfs from it and update the network.
+                logger.info("Reducing the number of nnet outputs...")
+                common_lib.execute_command(
+                    "steps/nnet3/chain/e2e_tie_nnet.sh --iter {it} {d}".format(
+                        it=75+1, d=args.dir))
+
 
 
 
@@ -545,6 +559,9 @@ def train(args, run_opts):
     if args.stage <= num_iters:
         logger.info("Doing final combination to produce final.mdl")
         logger.info("Disable-MMI for combination: {}".format(disable_mmi))
+        comb_opts = '--disable-mmi={}'.format(disable_mmi)
+        if args.n_tie != 0:
+            comb_opts += ' --pdf-map-filename={}/pdf-map.txt'.format(args.dir)
         chain_lib.combine_models(
             dir=args.dir, num_iters=num_iters,
             models_to_combine=models_to_combine,
@@ -555,7 +572,7 @@ def train(args, run_opts):
             xent_regularize=args.xent_regularize,
             run_opts=run_opts,
             sum_to_one_penalty=args.combine_sum_to_one_penalty,
-            comb_opts='--disable-mmi={} --pdf-map-filename={}/pdf-map.txt'.format(disable_mmi, args.dir))
+            comb_opts=comb_opts)
 
 
     if args.cleanup:
