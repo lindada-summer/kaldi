@@ -36,7 +36,7 @@ struct NnetChainTrainingOptions {
   NnetTrainerOptions nnet_config;
   chain::ChainTrainingOptions chain_config;
   bool apply_deriv_weights;
-  int32 num_phone_sets, num_pdfs_to_tie;
+  int32 num_phone_sets, percent_pdfs_to_tie;
   std::string write_pdf_map_filename;
   int32 num_pdfs_per_phone;
   NnetChainTrainingOptions(): apply_deriv_weights(true),

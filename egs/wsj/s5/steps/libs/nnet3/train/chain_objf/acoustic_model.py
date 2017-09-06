@@ -288,7 +288,7 @@ def train_one_iteration(dir, iter, srand, egs_dir,
 
     # Set off jobs doing some diagnostics, in the background.
     # Use the egs dir from the previous iteration for the diagnostics
-    logger.info("Training neural net (pass {0})".format(iter))
+    # logger.info("Training neural net (pass {0})".format(iter))
 
     # check if different iterations use the same random seed
     if os.path.exists('{0}/srand'.format(dir)):
@@ -583,7 +583,7 @@ def combine_models(dir, num_iters, models_to_combine, num_chunk_per_minibatch_st
                 --sum-to-one-penalty={penalty} \
                 --enforce-positive-weights=true \
                 --verbose=3 {dir}/den.fst {raw_models} \
-                "ark,bg:nnet3-chain-copy-egs ark:{egs_dir}/train_subset_all.cegs ark:- | \
+                "ark,bg:nnet3-chain-copy-egs ark:{egs_dir}/combine.cegs ark:- | \
                     nnet3-chain-merge-egs --minibatch-size={num_chunk_per_mb} \
                     ark:- ark:- |" - \| \
                 nnet3-am-copy --set-raw-nnet=- {dir}/{num_iters}.mdl \

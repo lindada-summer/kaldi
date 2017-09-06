@@ -114,7 +114,8 @@ void NnetChainTrainer::DoPdfTying() const {
   }
 
   // select opts.percent_pdfs_to_tie of them to tie
-  int32 num_pdfs = opts_.num_phone_sets * (opts_.num_phone_sets + 1);
+  int32 num_pdfs = opts_.num_phone_sets * (opts_.num_phone_sets + 1) *
+      opts_.num_pdfs_per_phone;
   KALDI_ASSERT(num_pdfs == nnet_->OutputDim("output"));
   std::vector<int32> pdf_map(opts_.chain_config.pdf_map);
   if (pdf_map.size() == 0) {
@@ -122,7 +123,9 @@ void NnetChainTrainer::DoPdfTying() const {
     for (int32 i = 0; i < num_pdfs; i++)
       pdf_map[i] = i;
   }
-  int32 num_pairs_to_tie = opts_.percent_pdfs_to_tie * distances.size();
+  int32 num_pairs_to_tie = opts_.percent_pdfs_to_tie * distances.size() / 100;
+  KALDI_LOG << "Tying " << num_pairs_to_tie << " pairs out of "
+            << distances.size() << "pairs in total...";
   for (int32 i = 0; i < num_pairs_to_tie; i++) {
     int32 n = distances[i].first.first;
     int32 m = distances[i].first.second;
@@ -175,7 +178,7 @@ void NnetChainTrainer::ProcessOutputs(const NnetChainExample &eg,
 
     const CuMatrixBase<BaseFloat> &nnet_output = computer->GetOutput(sup.name);
 
-    if (opts_.num_pdfs_to_tie != 0) { // collect stats for #pdf_tying
+    if (opts_.percent_pdfs_to_tie != 0) { // collect stats for #pdf_tying
       KALDI_ASSERT(opts_.num_phone_sets > 0);
       KALDI_ASSERT(!opts_.write_pdf_map_filename.empty());
       KALDI_ASSERT(opts_.num_pdfs_per_phone == 1 ||
