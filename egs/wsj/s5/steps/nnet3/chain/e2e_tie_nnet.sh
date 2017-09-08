@@ -19,7 +19,11 @@ dir=$1
 
 old_numpdfs=$(tree-info $dir/tree|grep num-pdfs|awk '{print $2}')
 numpdfs=$(tail -1 $dir/pdf-map.txt|awk '{print $2}')
-sed "s|$old_numpdfs|$numpdfs|g" $dir/configs/final.config >$dir/configs/tied.config
+#sed "s|$old_numpdfs|$numpdfs|g" $dir/configs/final.config >$dir/configs/tied.config
+tail -5 $dir/configs/final.config | \
+  sed "s|$old_numpdfs|$numpdfs|g" | \
+  sed "s|param-stddev=0.0|param-stddev=0.0|" | \
+  sed "s|bias-stddev=0.0|bias-stddev=0.0|" >$dir/configs/tied.config
 nnet3-am-copy --nnet-config=$dir/configs/tied.config $dir/$iter.mdl $dir/$iter.mdl
 cp $dir/$iter.mdl $dir/$[$iter-1].mdl
 rm $dir/cache*

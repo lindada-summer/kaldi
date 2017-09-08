@@ -7,7 +7,7 @@ set -e
 stage=12
 train_stage=-10
 get_egs_stage=-10
-affix=dim600  # 2 layers have dropout with proportion 0.2
+affix=_dim600  # 2 layers have dropout with proportion 0.2
 decode_iter=
 lat_beam=8.0
 beam=15.0
@@ -19,7 +19,7 @@ final_effective_lrate=0.0001
 max_param_change=2.0
 final_layer_normalize_target=0.5
 num_jobs_initial=2
-num_jobs_final=5
+num_jobs_final=12
 minibatch_size=150=128,64/300=100,64,32/600=50,32,16/1200=16,8
 remove_egs=false
 common_egs_dir=
@@ -40,8 +40,7 @@ den_use_initials=true
 den_use_finals=false
 slc=1.0
 shared_phones=true
-train_set=train_si284_spEx_hires
-test_sets="test_dev93 test_eval92"
+train_set=train_cleaned_seg_spEx_hires
 topo_affix=_chain
 tree_affix=_shared-tr1sl1
 topo_opts=
@@ -50,16 +49,17 @@ first_layer_splice=-1,0,1
 add_deltas=false
 disable_ng=false
 momentum=0
-nnet_block=relu-renorm-layer
+nnet_block=relu-batchnorm-layer
 no_viterbi_percent=100
 src_tree_dir=  # set this in case we want to use another tree (this won't be end2end anymore)
 drop_prop=0.2
 drop_schedule=
 combine_sto_penalty=0.0
-dbl_chk=false
+dbl_chk=true
 prefinal_dim=$dim
 frame_subsampling_factor=3
-normalize_egs=false
+xent_regularize=0.1
+
 
 proportional_shrink=0.0
 chunk_left_context=0
@@ -88,7 +88,7 @@ fi
 
 lang=data/lang_e2e${topo_affix}
 treedir=exp/chain/e2e_tree${tree_affix}_topo${topo_affix}
-dir=exp/chain/e2e_nodrop_7L${affix}${topo_affix}${tree_affix}
+dir=exp/chain/e2e_xent7L${affix}${topo_affix}${tree_affix}
 echo "Run $rid, dir = $dir" >> drop_runs.log
 
 input_dim=40
@@ -143,7 +143,7 @@ if [ $stage -le 12 ]; then
     rc2=4
   fi
   num_targets=$(tree-info $treedir/tree |grep num-pdfs|awk '{print $2}')
-  #learning_rate_factor=$(echo "print 0.5/$xent_regularize" | python)
+  learning_rate_factor=$(echo "print 0.5/$xent_regularize" | python)
 
   mkdir -p $dir/configs
   cat <<EOF > $dir/configs/network.xconfig
@@ -153,13 +153,17 @@ if [ $stage -le 12 ]; then
   # the first splicing is moved before the lda layer, so no splicing here
   $nnet_block name=tdnn1 input=Append($first_layer_splice) dim=$dim max-change=$hid_max_change self-repair-scale=$self_repair $common
   $nnet_block name=tdnn2 input=Append(-1,0,1) dim=$dim max-change=$hid_max_change self-repair-scale=$self_repair $common
-  $nnet_block name=tdnn3 input=Append(-1,0,1) dim=$dim max-change=$hid_max_change self-repair-scale=$self_repair $common
+  $nnet_block name=tdnn3 input=Append(-1,0,1,2) dim=$dim max-change=$hid_max_change self-repair-scale=$self_repair $common
   $nnet_block name=tdnn4 input=Append(-$lc1,0,$rc1) dim=$dim max-change=$hid_max_change self-repair-scale=$self_repair $common
   $nnet_block name=tdnn5 input=Append(-$lc2,0,$rc1) dim=$dim max-change=$hid_max_change self-repair-scale=$self_repair $common
   $nnet_block name=tdnn6 input=Append(-$lc2,0,$rc2) dim=$dim max-change=$hid_max_change self-repair-scale=$self_repair $common
 
   $nnet_block name=prefinal-chain input=tdnn6 dim=$prefinal_dim target-rms=$final_layer_normalize_target self-repair-scale=$self_repair $common
   output-layer name=output include-log-softmax=true dim=$num_targets max-change=$final_max_change $common
+
+
+  $nnet_block name=prefinal-xent input=tdnn6 dim=$prefinal_dim target-rms=0.5
+  output-layer name=output-xent dim=$num_targets learning-rate-factor=$learning_rate_factor max-change=1.5
 
 EOF
   steps/nnet3/xconfig_to_configs.py --xconfig-file $dir/configs/network.xconfig --config-dir $dir/configs/
@@ -176,6 +180,7 @@ if [ $stage -le 13 ]; then
   steps/nnet3/chain/train_e2e.py --stage $train_stage \
     --cmd "$decode_cmd" \
     --feat.cmvn-opts "$cmvn_opts" \
+    --chain.xent-regularize $xent_regularize \
     --chain.leaky-hmm-coefficient $leaky_hmm_coeff \
     --chain.l2-regularize $l2_regularize \
     --chain.apply-deriv-weights false \
@@ -183,8 +188,8 @@ if [ $stage -le 13 ]; then
     --chain.frame-subsampling-factor=$frame_subsampling_factor \
     --egs.dir "$common_egs_dir" \
     --egs.stage $get_egs_stage \
-    --egs.opts "--normalize-egs $normalize_egs --add-deltas $add_deltas" \
-    --trainer.options="--offset_first_transitions=$normalize_egs --den-use-initials=$den_use_initials --den-use-finals=$den_use_finals --check-derivs=$dbl_chk" \
+    --egs.opts "--normalize-egs false --add-deltas $add_deltas" \
+    --trainer.options="--compiler.cache-capacity=512 --den-use-initials=$den_use_initials --den-use-finals=$den_use_finals --check-derivs=$dbl_chk" \
     --trainer.dropout-schedule "$drop_schedule" \
     --trainer.no-mmi-percent $no_mmi_percent \
     --trainer.no-viterbi-percent $no_viterbi_percent \
@@ -208,60 +213,33 @@ if [ $stage -le 13 ]; then
     --dir $dir  || exit 1;
 fi
 
+
 if [ $stage -le 14 ]; then
-  # The reason we are using data/lang here, instead of $lang, is just to
-  # emphasize that it's not actually important to give mkgraph.sh the
-  # lang directory with the matched topology (since it gets the
-  # topology file from the model).  So you could give it a different
-  # lang directory, one that contained a wordlist and LM of your choice,
-  # as long as phones.txt was compatible.
-
-  utils/lang/check_phones_compatible.sh \
-    data/lang_test_tgpr/phones.txt $lang/phones.txt
-  utils/mkgraph.sh \
-    --self-loop-scale 1.0 data/lang_test_tgpr \
-    $dir $treedir/graph_tgpr || exit 1;
-
-  utils/lang/check_phones_compatible.sh \
-    data/lang_test_bd_tgpr/phones.txt $lang/phones.txt
-  utils/mkgraph.sh \
-    --self-loop-scale 1.0 data/lang_test_bd_tgpr \
-    $dir $treedir/graph_bd_tgpr || exit 1;
+  # Note: it might appear that this data/lang_chain directory is mismatched, and it is as
+  # far as the 'topo' is concerned, but this script doesn't read the 'topo' from
+  # the lang directory.
+  utils/mkgraph.sh --self-loop-scale 1.0 data/lang $dir $dir/graph
 fi
 
 if [ $stage -le 15 ]; then
-  frames_per_chunk=150
   rm $dir/.error 2>/dev/null || true
-
-  for data in $test_sets; do
-    (
-      data_affix=$(echo $data | sed s/test_//)
-      nspk=$(wc -l <data/${data}_hires/spk2utt)
-      for lmtype in tgpr bd_tgpr; do
-        steps/nnet3/decode.sh \
-          --lattice-beam $lat_beam \
+  for dset in dev test; do
+      (
+      steps/nnet3/decode.sh --num-threads 4 --nj 30 --cmd "$decode_cmd" \
           --acwt 1.0 --post-decode-acwt 10.0 \
-          --extra-left-context $chunk_left_context \
-          --extra-right-context $chunk_right_context \
-          --extra-left-context-initial 0 \
-          --extra-right-context-final 0 \
-          --frames-per-chunk $frames_per_chunk \
-          --nj $nspk --cmd "$decode_cmd"  --num-threads 4 \
-          $treedir/graph_${lmtype} data/${data}_hires ${dir}/decode_${lmtype}_${data_affix} || exit 1
-      done
-      steps/lmrescore.sh \
-        --self-loop-scale 1.0 \
-        --cmd "$decode_cmd" data/lang_test_{tgpr,tg} \
-        data/${data}_hires ${dir}/decode_{tgpr,tg}_${data_affix} || exit 1
-      steps/lmrescore_const_arpa.sh --cmd "$decode_cmd" \
-        data/lang_test_bd_{tgpr,fgconst} \
-       data/${data}_hires ${dir}/decode_${lmtype}_${data_affix}{,_fg} || exit 1
+          --scoring-opts "--min-lmwt 5 " \
+         $dir/graph data/${dset}_hires $dir/decode_${dset} || exit 1;
+      steps/lmrescore_const_arpa.sh --cmd "$decode_cmd" data/lang data/lang_rescore \
+        data/${dset}_hires ${dir}/decode_${dset} ${dir}/decode_${dset}_rescore || exit 1
     ) || touch $dir/.error &
   done
   wait
-  [ -f $dir/.error ] && echo "$0: there was a problem while decoding" && exit 1
+  if [ -f $dir/.error ]; then
+    echo "$0: something went wrong in decoding"
+    exit 1
+  fi
 fi
 
 echo "Run $rid done. Date: $(date). Results:" >> drop_runs.log
-local/chain/compare_wer.sh $dir
-local/chain/compare_wer.sh $dir >> drop_runs.log
+local/chain/compare_wer_general.sh $dir
+local/chain/compare_wer_general.sh $dir >> drop_runs.log
