@@ -153,7 +153,7 @@ int main(int argc, char *argv[]) {
       for (int tid = 1; tid <= num_tids; tid++) {
         int32 pdfid = trans_model.TransitionIdToPdf(tid);
         int32 phone = trans_model.TransitionIdToPhone(tid);
-        pid_map[pdfid] = phone_map[phone];
+        pid_map[pdfid] = phone_map[phone];   // TODO(hhadian)  ---> this won't be right for tied states as they can belong to multiple phones
       }
     }
 

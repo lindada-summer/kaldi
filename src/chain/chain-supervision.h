@@ -262,7 +262,8 @@ bool TrainingGraphToSupervision(
     const fst::StdVectorFst& training_graph,
     const TransitionModel& trans_model,
     int32 num_frames,
-    Supervision *supervision);
+    Supervision *supervision,
+    bool add_tids = false);
 
 /**
    This function sorts the states of the fst argument in an ordering

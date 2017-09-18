@@ -234,7 +234,8 @@ bool TrainingGraphToSupervision(
     const fst::StdVectorFst& training_graph,
     const TransitionModel &trans_model,
     int32 num_frames,
-    Supervision *supervision) {
+    Supervision *supervision,
+    bool add_tids) {
   using fst::VectorFst;
   using fst::StdArc;
   using fst::StdVectorFst;
@@ -250,7 +251,13 @@ bool TrainingGraphToSupervision(
       if (arc.ilabel == 0) { KALDI_WARN << "Utterance rejected due to eps on input label"; return false; }
       KALDI_ASSERT(arc.ilabel != 0);
       StdArc arc2(arc);
-      arc2.ilabel = arc2.olabel = trans_model.TransitionIdToPdf(arc.ilabel) + 1;
+      int32 tid = arc.ilabel;
+      arc2.ilabel = trans_model.TransitionIdToPdf(tid) + 1; // pdf_id + 1
+      if (add_tids)
+        arc2.olabel = tid;  // only for special experiments, like aligning w.r.t
+                            // phones. Note: it won't be composable with den FST anymore
+      else
+        arc2.olabel = arc2.ilabel;
       aiter.SetValue(arc2);
     }
   }
@@ -574,12 +581,14 @@ void Supervision::Write(std::ostream &os, bool binary) const {
         // In text mode, write the FST without any compactification.
         WriteFstKaldi(os, binary, e2e_fsts[i]);
       } else {
+        // We use tids on the olabels
+        WriteFstKaldi(os, binary, e2e_fsts[i]);
         // Write using StdAcceptorCompactFst, making use of the fact that it's an
         // acceptor.
-        fst::FstWriteOptions write_options("<unknown>");
-        fst::StdCompactAcceptorFst::WriteFst(
-            e2e_fsts[i], fst::AcceptorCompactor<fst::StdArc>(), os,
-            write_options);
+        //fst::FstWriteOptions write_options("<unknown>");
+        //fst::StdCompactAcceptorFst::WriteFst(
+        //    e2e_fsts[i], fst::AcceptorCompactor<fst::StdArc>(), os,
+        //    write_options);
       }
     }
     WriteToken(os, binary, "</FSTs>");
@@ -628,13 +637,14 @@ void Supervision::Read(std::istream &is, bool binary) {
       if (!binary) {
         ReadFstKaldi(is, binary, &e2e_fsts[i]);
       } else {
-        fst::StdCompactAcceptorFst *compact_fst =
-            fst::StdCompactAcceptorFst::Read(
-                is, fst::FstReadOptions(std::string("[unknown]")));
-        if (compact_fst == NULL)
-          KALDI_ERR << "Error reading compact FST from disk";
-        e2e_fsts[i] = *compact_fst;
-        delete compact_fst;
+        ReadFstKaldi(is, binary, &e2e_fsts[i]);
+        //fst::StdCompactAcceptorFst *compact_fst =
+        //    fst::StdCompactAcceptorFst::Read(
+        //        is, fst::FstReadOptions(std::string("[unknown]")));
+        //if (compact_fst == NULL)
+        //  KALDI_ERR << "Error reading compact FST from disk";
+        //e2e_fsts[i] = *compact_fst;
+        //delete compact_fst;
       }
     }
     ExpectToken(is, binary, "</FSTs>");

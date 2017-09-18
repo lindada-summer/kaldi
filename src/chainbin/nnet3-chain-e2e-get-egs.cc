@@ -48,7 +48,8 @@ static bool ProcessFile(const ExampleGenerationConfig &opts,
                         const fst::StdVectorFst& training_fst,
                         const std::string &utt_id,
                         bool compress,
-                        NnetChainExampleWriter *example_writer) {
+                        NnetChainExampleWriter *example_writer,
+                        bool add_tids) {
 // TODO(hhadian)
 // check feats.NumRows() and if it is not equal to an allowed num-frames
 // delete a few frames from beginning or end
@@ -77,7 +78,7 @@ static bool ProcessFile(const ExampleGenerationConfig &opts,
   chain::Supervision supervision;
   KALDI_VLOG(2) << "Preparing supervision for utt " << utt_id;
   if (!TrainingGraphToSupervision(training_fst, trans_model,
-                                   num_output_frames, &supervision))
+                                  num_output_frames, &supervision, add_tids))
     return false;
   if (normalization_fst.NumStates() > 0 &&
       !AddWeightToSupervisionFst(normalization_fst,
@@ -170,24 +171,18 @@ int main(int argc, char *argv[]) {
     using fst::StdArc;
 
     const char *usage =
-        "Get frame-by-frame examples of data for nnet3+chain neural network\n"
-        "training.  This involves breaking up utterances into pieces of a\n"
-        "fixed size.  Input will come from chain-get-supervision.\n"
+        "Get frame-by-frame examples of data for nnet3+chain end2end neural network\n"
+        "training."
         "Note: if <normalization-fst> is not supplied the egs will not be\n"
         "ready for training; in that case they should later be processed\n"
         "with nnet3-chain-normalize-egs\n"
         "\n"
         "Usage:  nnet3-chain-get-egs [options] [<normalization-fst>] <features-rspecifier> "
         "<fst-rspecifier> <trans-model> <egs-wspecifier>\n"
-        "\n"
-        "An example [where $feats expands to the actual features]:\n"
-        "chain-get-supervision [args] | \\\n"
-        "  nnet3-chain-get-egs --left-context=25 --right-context=9 --num-frames=20 dir/normalization.fst \\\n"
-        "  \"$feats\" ark,s,cs:- ark:cegs.1.ark\n"
-        "Note: the --frame-subsampling-factor option must be the same as given to\n"
-        "chain-get-supervision.\n";
+        "\n";
 
-    bool compress = true;
+    bool compress = true,
+        add_tids = false;
     int32 length_tolerance = 100, online_ivector_period = 1;
 
     ExampleGenerationConfig eg_config;  // controls num-frames,
@@ -197,6 +192,10 @@ int main(int argc, char *argv[]) {
     std::string online_ivector_rspecifier;
 
     ParseOptions po(usage);
+    po.Register("add-tids", &add_tids, "If true, will use transition id's as "
+                "output labels of the numerator FST; otherwise "
+                "pdf id's will be used for both out/in labels. "
+                "This can be used for debugging or special operations.");
     po.Register("compress", &compress, "If true, write egs in "
                 "compressed format.");
     po.Register("ivectors", &online_ivector_rspecifier, "Alias for "
@@ -292,7 +291,7 @@ int main(int argc, char *argv[]) {
 
         if (!ProcessFile(eg_config, trans_model, normalization_fst, features,
                          online_ivector_feats, online_ivector_period,
-                         fst, key, compress, &example_writer))
+                         fst, key, compress, &example_writer, add_tids))
           num_err++;
       }
     }

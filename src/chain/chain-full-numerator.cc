@@ -584,5 +584,130 @@ void FullNumeratorComputation::BetaGeneralFrameDebug(int32 t) {
 }
 
 
+bool Align(const Supervision& sup,
+           const MatrixBase<BaseFloat> &nnet_output_transposed,
+           std::vector<std::vector<int32> > *alignments,
+           BaseFloat *tot_logprob) {
+  using std::vector;
+  int32 B = sup.num_sequences,
+      T = sup.frames_per_sequence;
+  KALDI_ASSERT(sup.e2e_fsts.size() == B);
+  struct InTransition {
+    BaseFloat logprob;
+    int32 pdf_id;
+    int32 tid;
+    int32 start_state;
+  };
+  InTransition null_trans;
+  null_trans.logprob = -1; null_trans.pdf_id = -1; null_trans.tid = -1; null_trans.start_state = -1;
+  // init
+  // indexing order: seq, time, state
+  vector<vector<vector<BaseFloat> > > logdelta(B, vector<vector<BaseFloat> >(T + 1));
+  vector<vector<vector<InTransition> > > sai(B, vector<vector<InTransition> >(T + 1));
+  for (int32 seq = 0; seq < B; seq++) {
+    for (int32 t = 0; t < T + 1; t++) {
+      BaseFloat value = (t == 0) ? 0 : -std::numeric_limits<BaseFloat>::infinity();
+      logdelta[seq][t] = vector<BaseFloat>(sup.e2e_fsts[seq].NumStates(), value);
+      sai[seq][t] = vector<InTransition>(sup.e2e_fsts[seq].NumStates(), null_trans);
+    }
+  }
+
+  // init incmoing transitions for easy access
+  vector<vector<vector<InTransition> > > in_transitions(B); // indexed by seq, state
+  vector<vector<BaseFloat> > final_logprobs(B); // indexed by seq, state
+  for (int32 seq = 0; seq < B; seq++) {
+    in_transitions[seq] = vector<vector<InTransition> >(sup.e2e_fsts[seq].NumStates());
+    final_logprobs[seq] = vector<BaseFloat>(sup.e2e_fsts[seq].NumStates(),
+                                            -std::numeric_limits<BaseFloat>::infinity());
+  }
+
+  for (int32 seq = 0; seq < B; seq++) {
+    for (int32 s = 0; s < sup.e2e_fsts[seq].NumStates(); s++) {
+      final_logprobs[seq][s] = -sup.e2e_fsts[seq].Final(s).Value();
+      for (fst::ArcIterator<fst::StdVectorFst> aiter(sup.e2e_fsts[seq], s);
+           !aiter.Done();
+           aiter.Next()) {
+        const fst::StdArc &arc = aiter.Value();
+        InTransition transition;
+        transition.logprob = -arc.weight.Value();
+        transition.pdf_id = arc.ilabel - 1;
+        transition.tid = arc.olabel;
+        transition.start_state = s;
+        in_transitions[seq][arc.nextstate].push_back(transition);
+      }
+    }
+  }
+
+  // viterbi
+  int32 num_pdfs = nnet_output_transposed.NumRows();
+  KALDI_ASSERT(num_pdfs == sup.label_dim);
+  vector<vector<int32> > ali(B, vector<int32>(T, -1));
+  for (int32 t = 1; t <= T; t++) {
+    // 'logprobs' is the matrix of pseudo-loglikelihoods for frame t - 1.
+    SubMatrix<BaseFloat> logprobs(nnet_output_transposed, 0, num_pdfs, (t - 1) * B, B);
+    for (int32 seq = 0; seq < B; seq++) {
+      bool at_least_one_state_active = false;
+
+      for (int32 j = 0; j < sup.e2e_fsts[seq].NumStates(); j++) {  // iterate over transitions i --> j
+        float max = -std::numeric_limits<float>::infinity();
+        InTransition argmax(null_trans);
+        for (auto tr = in_transitions[seq][j].begin(); tr != in_transitions[seq][j].end(); tr++) {
+          int32 i = tr->start_state;
+          BaseFloat this_arc = logdelta[seq][t-1][i] + tr->logprob + logprobs(tr->pdf_id, seq);
+          if (this_arc > max) {
+            max = this_arc;
+            argmax = *tr;
+          }
+        } // i
+        if (max - max == 0)
+          at_least_one_state_active = true;
+        logdelta[seq][t][j] = max;
+        sai[seq][t - 1][j] = argmax;
+      } // j
+
+      if (!at_least_one_state_active) {
+        KALDI_WARN << "Viterbi failure: "
+                   << " seq: " << seq
+                   << " t: " << t;
+        return false;
+      }
+
+      // finalize
+      if (t == T) {
+        float max = -std::numeric_limits<float>::infinity();
+        InTransition argmax(null_trans);
+        for (int j = 0; j < sup.e2e_fsts[seq].NumStates(); j++) {
+          float fin_logprob = final_logprobs[seq][j];
+          if (logdelta[seq][t][j] + fin_logprob > max) {
+            max = logdelta[seq][t][j] + fin_logprob;
+            argmax = sai[seq][t - 1][j];
+          }
+        }
+        if (max - max != 0) {
+          KALDI_WARN << "Viterbi final state failure: "
+                     << " seq: " << seq
+                     << " t: " << t
+                     << " max: " << max;
+          return false;
+        }
+        // tot_log_prob_(seq) = max;
+        ali[seq][T - 1] = argmax.tid;
+        // backtrack
+        InTransition tr = argmax;
+        for (int32 t1 = T - 2; t1 >= 0; t1--) {
+          tr = sai[seq][t1][tr.start_state];
+          ali[seq][t1] = tr.tid;
+        }
+      } //fin
+
+    } // seq
+  } // t
+
+  if (alignments)
+    *alignments = ali;
+  return true;
+}
+
+
 }  // namespace chain
 }  // namespace kaldi

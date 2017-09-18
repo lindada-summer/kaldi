@@ -56,8 +56,8 @@ class FullNumeratorComputation {
 
 
   FullNumeratorComputation(const ChainTrainingOptions &opts,
-                         const NumeratorGraph &num_graph,
-                         const CuMatrixBase<BaseFloat> &nnet_output);
+                           const NumeratorGraph &num_graph,
+                           const CuMatrixBase<BaseFloat> &nnet_output);
 
   // Does the forward computation.  Returns the total log-prob multiplied
   // by supervision_.weight.
@@ -126,6 +126,11 @@ class FullNumeratorComputation {
 
   bool ok_;
 };
+
+bool Align(const Supervision& sup,
+           const MatrixBase<BaseFloat> &nnet_output,
+           std::vector<std::vector<int32> > *alignments,
+           BaseFloat *tot_logprob);
 
 
 }  // namespace chain

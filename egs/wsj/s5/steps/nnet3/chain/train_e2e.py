@@ -441,7 +441,9 @@ def train(args, run_opts):
     equal_align = True  # keep it true for 20 first iterations
     for iter in range(num_iters):
 
-        percent = num_archives_processed*100 / num_archives_to_process
+        percent = num_archives_processed * 100.0 / num_archives_to_process
+        epoch = (num_archives_processed * args.num_epochs
+                 / num_archives_to_process)
         if disable_mmi and percent >= args.no_mmi_percent:
             disable_mmi = False
             logger.info("*** MMI was enabled at percentage: {} ***".format(percent))
@@ -460,7 +462,6 @@ def train(args, run_opts):
                                * float(iter) / num_iters)
 
         if args.stage <= iter:
-            logger.info("Iter: {}/{}      Percent complete: {}".format(iter, num_iters-1, percent))
             model_file = "{dir}/{iter}.mdl".format(dir=args.dir, iter=iter)
 
             lrate = common_train_lib.get_learning_rate(iter, current_num_jobs,
@@ -494,6 +495,18 @@ def train(args, run_opts):
             if args.n_tie != 0 and iter > 75:
                 chain_opts += " --pdf-map-filename={}/pdf-map.txt".format(
                     args.dir)
+
+
+            shrink_info_str = ''
+            if shrinkage_value != 1.0:
+                shrink_info_str = 'shrink: {0:0.5f}'.format(shrinkage_value)
+            logger.info("Iter: {0}/{1}    "
+                        "Epoch: {2:0.2f}/{3:0.1f} ({4:0.1f}% complete)    "
+                        "lr: {5:0.6f}    {6}".format(iter, num_iters - 1,
+                                                     epoch, args.num_epochs,
+                                                     percent,
+                                                     lrate, shrink_info_str))
+
             chain_lib.train_one_iteration(
                 dir=args.dir,
                 iter=iter,
