@@ -22,7 +22,7 @@ final_layer_normalize_target=0.5
 num_jobs_initial=3
 num_jobs_final=16
 minibatch_size=150=128,64/300=100,64,32/600=50,32,16/1200=16,8
-remove_egs=false
+remove_egs=true
 common_egs_dir=
 no_mmi_percent=20
 l2_regularize=0.00005
@@ -58,6 +58,8 @@ drop_schedule=
 combine_sto_penalty=0.0
 dbl_chk=false
 base_lang_affix=
+normalize_egs=false
+use_final_stddev=false
 
 # End configuration section.
 echo "$0 $@"  # Print the command line for logging
@@ -80,9 +82,14 @@ where "nvcc" is installed.
 EOF
 fi
 
+drop_affix=
+if [ ! -z $drop_prop ]; then
+  drop_affix="drop_2Ls_"
+fi
+
 lang=data/lang${base_lang_affix}_e2e${topo_affix}
 treedir=exp/chain/e2e${base_lang_affix}_tree${tree_affix}_topo${topo_affix}
-dir=exp/chain/e2edrop_2Ls${base_lang_affix}${affix}${topo_affix}${tree_affix}
+dir=exp/chain/e2e${drop_affix}${base_lang_affix}${affix}${topo_affix}${tree_affix}
 echo "Run $rid, dir = $dir" >> drop_runs.log
 
 input_dim=40
@@ -128,31 +135,44 @@ if [ $stage -le 12 ]; then
 
   num_targets=$(tree-info $treedir/tree |grep num-pdfs|awk '{print $2}')
   #learning_rate_factor=$(echo "print 0.5/$xent_regularize" | python)
+  final_stddev=0
+  if $use_final_stddev; then
+    final_stddev=$(echo "print(1.0/$dim)" | python)
+  fi
 
   mkdir -p $dir/configs
-  cat <<EOF > $dir/configs/network.xconfig
-#  input dim=100 name=ivector
-  input dim=$input_dim name=input
+  if [ -z $drop_prop ]; then
+    cat <<EOF > $dir/configs/network.xconfig
+    input dim=$input_dim name=input
+    # the first splicing is moved before the lda layer, so no splicing here
+    $nnet_block name=tdnn1 input=Append($first_layer_splice) dim=$dim max-change=$hid_max_change self-repair-scale=$self_repair $common
+    $nnet_block name=tdnn2 input=Append(-1,0,1) dim=$dim max-change=$hid_max_change self-repair-scale=$self_repair $common
+    $nnet_block name=tdnn3 input=Append(-1,0,1) dim=$dim max-change=$hid_max_change self-repair-scale=$self_repair $common
+    $nnet_block name=tdnn4 input=Append(-3,0,3) dim=$dim max-change=$hid_max_change self-repair-scale=$self_repair $common
+    $nnet_block name=tdnn5 input=Append(-3,0,3) dim=$dim max-change=$hid_max_change self-repair-scale=$self_repair $common
+    $nnet_block name=tdnn6 input=Append(-3,0,3) dim=$dim max-change=$hid_max_change self-repair-scale=$self_repair $common
+    $nnet_block name=tdnn7 input=Append(-3,0,3) dim=$dim max-change=$hid_max_change self-repair-scale=$self_repair $common
 
-  # please note that it is important to have input layer with the name=input
-  # as the layer immediately preceding the fixed-affine-layer to enable
-  # the use of short notation for the descriptor
-#  fixed-affine-layer name=lda input=Append(-1,0,1) affine-transform-file=$dir/configs/lda.mat
-
-  # the first splicing is moved before the lda layer, so no splicing here
-  $nnet_block name=tdnn1 input=Append($first_layer_splice) dim=$dim max-change=$hid_max_change self-repair-scale=$self_repair $common
-  relu-batchnorm-dropout-layer name=tdnn2 input=Append(-1,0,1) dim=$dim max-change=$hid_max_change self-repair-scale=$self_repair dropout-proportion=$drop_prop $common
-  $nnet_block name=tdnn3 input=Append(-1,0,1) dim=$dim max-change=$hid_max_change self-repair-scale=$self_repair $common
-  $nnet_block name=tdnn4 input=Append(-3,0,3) dim=$dim max-change=$hid_max_change self-repair-scale=$self_repair $common
-  $nnet_block name=tdnn5 input=Append(-3,0,3) dim=$dim max-change=$hid_max_change self-repair-scale=$self_repair $common
-  relu-batchnorm-dropout-layer name=tdnn6 input=Append(-3,0,3) dim=$dim max-change=$hid_max_change self-repair-scale=$self_repair dropout-proportion=$drop_prop $common
-  $nnet_block name=tdnn7 input=Append(-3,0,3) dim=$dim max-change=$hid_max_change self-repair-scale=$self_repair $common
-
-  ## adding the layers for chain branch
-  $nnet_block name=prefinal-chain input=tdnn7 dim=$dim target-rms=$final_layer_normalize_target self-repair-scale=$self_repair $common
-  output-layer name=output include-log-softmax=true dim=$num_targets max-change=$final_max_change $common
-
+    $nnet_block name=prefinal-chain input=tdnn7 dim=$dim target-rms=$final_layer_normalize_target self-repair-scale=$self_repair $common
+    output-layer name=output include-log-softmax=true dim=$num_targets max-change=$final_max_change $common param-stddev=$final_stddev
 EOF
+  else
+    cat <<EOF > $dir/configs/network.xconfig
+    input dim=$input_dim name=input
+    # the first splicing is moved before the lda layer, so no splicing here
+    $nnet_block name=tdnn1 input=Append($first_layer_splice) dim=$dim max-change=$hid_max_change self-repair-scale=$self_repair $common
+    relu-batchnorm-dropout-layer name=tdnn2 input=Append(-1,0,1) dim=$dim max-change=$hid_max_change self-repair-scale=$self_repair dropout-proportion=$drop_prop $common
+    $nnet_block name=tdnn3 input=Append(-1,0,1) dim=$dim max-change=$hid_max_change self-repair-scale=$self_repair $common
+    $nnet_block name=tdnn4 input=Append(-3,0,3) dim=$dim max-change=$hid_max_change self-repair-scale=$self_repair $common
+    $nnet_block name=tdnn5 input=Append(-3,0,3) dim=$dim max-change=$hid_max_change self-repair-scale=$self_repair $common
+    relu-batchnorm-dropout-layer name=tdnn6 input=Append(-3,0,3) dim=$dim max-change=$hid_max_change self-repair-scale=$self_repair dropout-proportion=$drop_prop $common
+    $nnet_block name=tdnn7 input=Append(-3,0,3) dim=$dim max-change=$hid_max_change self-repair-scale=$self_repair $common
+
+    $nnet_block name=prefinal-chain input=tdnn7 dim=$dim target-rms=$final_layer_normalize_target self-repair-scale=$self_repair $common
+    output-layer name=output include-log-softmax=true dim=$num_targets max-change=$final_max_change $common
+EOF
+  fi
+
   steps/nnet3/xconfig_to_configs.py --xconfig-file $dir/configs/network.xconfig --config-dir $dir/configs/
 fi
 
@@ -173,8 +193,8 @@ if [ $stage -le 13 ]; then
     --chain.lm-opts="--num-extra-lm-states=2000" \
     --egs.dir "$common_egs_dir" \
     --egs.stage $get_egs_stage \
-    --egs.opts "--normalize-egs false --add-deltas $add_deltas" \
-    --trainer.options="--compiler.cache-capacity=512 --den-use-initials=$den_use_initials --den-use-finals=$den_use_finals --check-derivs=$dbl_chk" \
+    --egs.opts "--normalize-egs $normalize_egs --add-deltas $add_deltas --num-train-egs-combine 800" \
+    --trainer.options="--compiler.cache-capacity=512 --offset-first-transitions=$normalize_egs --den-use-initials=$den_use_initials --den-use-finals=$den_use_finals --check-derivs=$dbl_chk" \
     --trainer.dropout-schedule "$drop_schedule" \
     --trainer.no-mmi-percent $no_mmi_percent \
     --trainer.no-viterbi-percent $no_viterbi_percent \

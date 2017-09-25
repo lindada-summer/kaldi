@@ -195,8 +195,8 @@ if [ $stage -le 13 ]; then
     --chain.lm-opts="--num-extra-lm-states=2000" \
     --egs.dir "$common_egs_dir" \
     --egs.stage $get_egs_stage \
-    --egs.opts "--normalize-egs $normalize_egs --add-deltas $add_deltas" \
-    --trainer.options="--offset_first_transitions=$normalize_egs --den-use-initials=$den_use_initials --den-use-finals=$den_use_finals --check-derivs=$dbl_chk" \
+    --egs.opts "--normalize-egs $normalize_egs --add-deltas $add_deltas --num-train-egs-combine 800" \
+    --trainer.options="--offset-first-transitions=$normalize_egs --den-use-initials=$den_use_initials --den-use-finals=$den_use_finals --check-derivs=$dbl_chk" \
     --trainer.dropout-schedule "$drop_schedule" \
     --trainer.no-mmi-percent $no_mmi_percent \
     --trainer.no-viterbi-percent $no_viterbi_percent \

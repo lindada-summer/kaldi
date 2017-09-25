@@ -450,7 +450,7 @@ def train(args, run_opts):
         if disable_viterbi and percent >= args.no_viterbi_percent:
             disable_viterbi = False
             logger.info("*** Viterbi was enabled at percentage: {} ***".format(percent))
-        if equal_align and iter > args.equal_align_iters:
+        if equal_align and iter >= args.equal_align_iters:
             equal_align = False
             logger.info("*** equal_align was disabled at iter: {} ***".format(iter))
 
