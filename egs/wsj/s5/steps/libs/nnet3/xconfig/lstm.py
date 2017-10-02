@@ -641,7 +641,7 @@ class XconfigFastLstmLayer(XconfigLayerBase):
 
         configs.append("###  Nodes for the components above.")
         configs.append("component-node name={0}.four_parts component={0}.W_all input=Append({1}, "
-                       "IfDefined(Offset({0}.r_trunc, {2})))".format(name, input_descriptor, delay))
+                       "IfDefined(Offset({0}.c_trunc, {2})))".format(name, input_descriptor, delay))
         configs.append("component-node name={0}.lstm_nonlin component={0}.lstm_nonlin "
                        "input=Append({0}.four_parts, IfDefined(Offset({0}.c_trunc, {1})))".format(name, delay))
         # we can print .c later if needed, but it generates a warning since it's not used.  could use c_trunc instead
@@ -649,7 +649,7 @@ class XconfigFastLstmLayer(XconfigLayerBase):
         configs.append("dim-range-node name={0}.m input-node={0}.lstm_nonlin dim-offset={1} dim={1}".format(name, cell_dim))
         configs.append("component-node name={0}.cm_trunc component={0}.cm_trunc input={0}.lstm_nonlin".format(name))
         configs.append("dim-range-node name={0}.c_trunc input-node={0}.cm_trunc dim-offset=0 dim={1}".format(name, cell_dim))
-        configs.append("dim-range-node name={0}.m_trunc input-node={0}.cm_trunc dim-offset={1} dim={1}".format(name, cell_dim))
+        # configs.append("dim-range-node name={0}.m_trunc input-node={0}.cm_trunc dim-offset={1} dim={1}".format(name, cell_dim))
         configs.append("### End LTSM layer '{0}'".format(name))
         return configs
 

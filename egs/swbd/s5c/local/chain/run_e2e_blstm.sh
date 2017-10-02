@@ -19,13 +19,13 @@ max_param_change=2.0
 final_layer_normalize_target=0.5
 num_jobs_initial=3
 num_jobs_final=16
-minibatch_size=150=64,32/300=32,16,8/600=16,8,4/1200=8,4,2
-remove_egs=false
+minibatch_size=150=64,32/300=32,16,8/600=16,8/1200=8,4
+remove_egs=true
 common_egs_dir=
 no_mmi_percent=101
 l2_regularize=0.00005
-tdnn_dim=600
-lstm_dim=600
+tdnn_dim=500
+lstm_dim=500
 frames_per_iter=2000000
 cmvn_opts="--norm-means=true --norm-vars=true"
 leaky_hmm_coeff=0.1
@@ -35,23 +35,25 @@ chunk_right_context=40
 self_repair_scale=0.00001
 label_delay=0
 
-acwt=1.2
-post_acwt=13.0
+acwt=1.0
+post_acwt=10.0
 num_scale_opts="--transition-scale=1.0 --self-loop-scale=1.0"
-equal_align_iters=19
-den_use_initials=false
-den_use_finals=true
+equal_align_iters=5
+den_use_initials=true
+den_use_finals=false
 slc=1.0
 shared_phones=true
 train_set=train_nodup_seg_spEx_hires
-topo_affix=_chain
-tree_affix=_dataEx1-shared-tr1sl1
-topo_opts=
+topo_affix=_1pdf
+tree_affix=_sharedT1S1
+topo_opts="--type 1pdf"
 uniform_lexicon=false
 first_layer_splice=0
 disable_ng=false
 final_layer_normalize_target=0.5
 dbl_chk=false
+normalize_egs=true
+use_final_stddev=true
 
 # End configuration section.
 echo "$0 $@"  # Print the command line for logging
@@ -76,7 +78,7 @@ fi
 
 lang=data/lang_e2e${topo_affix}
 treedir=exp/chain/e2e_tree${tree_affix}_topo${topo_affix}
-dir=exp/chain/e2e${affix}${topo_affix}${tree_affix}
+dir=exp/chain/e2eblstm${affix}${topo_affix}${tree_affix}
 echo "Run $rid, dir = $dir" >> blstm_runs.log
 
 nonproj_dim=$[lstm_dim/4]
@@ -113,11 +115,16 @@ if [ $stage -le 12 ]; then
 
   num_targets=$(tree-info $treedir/tree |grep num-pdfs|awk '{print $2}')
 
+  # recurrent-projection-dim=$proj_dim non-recurrent-projection-dim=$nonproj_dim
   lstm_opts="decay-time=20"
   dnn_opts=
   if $disable_ng; then
     lstm_opts="$lstm_opts affine-comp=AffineComponent"
     dnn_opts="affine-comp=AffineComponent"
+  fi
+  final_stddev=0
+  if $use_final_stddev; then
+    final_stddev=$(echo "print(1.0/$tdnn_dim)" | python)
   fi
 
   mkdir -p $dir/configs
@@ -127,17 +134,17 @@ if [ $stage -le 12 ]; then
   relu-layer name=tdnn1 input=Append($first_layer_splice) dim=$tdnn_dim
 
   # check steps/libs/nnet3/xconfig/lstm.py for the other options and defaults
-  fast-lstmp-layer name=blstm1-forward input=tdnn1 cell-dim=$lstm_dim recurrent-projection-dim=$proj_dim non-recurrent-projection-dim=$nonproj_dim delay=-3 $lstm_opts
-  fast-lstmp-layer name=blstm1-backward input=tdnn1 cell-dim=$lstm_dim recurrent-projection-dim=$proj_dim non-recurrent-projection-dim=$nonproj_dim delay=3 $lstm_opts
+  fast-lstm-layer name=blstm1-forward input=tdnn1 cell-dim=$lstm_dim delay=-3 $lstm_opts
+  fast-lstm-layer name=blstm1-backward input=tdnn1 cell-dim=$lstm_dim delay=3 $lstm_opts
 
-  fast-lstmp-layer name=blstm2-forward input=Append(blstm1-forward, blstm1-backward) cell-dim=$lstm_dim recurrent-projection-dim=$proj_dim non-recurrent-projection-dim=$nonproj_dim delay=-3 $lstm_opts
-  fast-lstmp-layer name=blstm2-backward input=Append(blstm1-forward, blstm1-backward) cell-dim=$lstm_dim recurrent-projection-dim=$proj_dim non-recurrent-projection-dim=$nonproj_dim delay=3 $lstm_opts
+  fast-lstm-layer name=blstm2-forward input=Append(blstm1-forward, blstm1-backward) cell-dim=$lstm_dim delay=-3 $lstm_opts
+  fast-lstm-layer name=blstm2-backward input=Append(blstm1-forward, blstm1-backward) cell-dim=$lstm_dim delay=3 $lstm_opts
 
-  fast-lstmp-layer name=blstm3-forward input=Append(blstm2-forward, blstm2-backward) cell-dim=$lstm_dim recurrent-projection-dim=$proj_dim non-recurrent-projection-dim=$nonproj_dim delay=-3 $lstm_opts
-  fast-lstmp-layer name=blstm3-backward input=Append(blstm2-forward, blstm2-backward) cell-dim=$lstm_dim recurrent-projection-dim=$proj_dim non-recurrent-projection-dim=$nonproj_dim delay=3 $lstm_opts
+  fast-lstm-layer name=blstm3-forward input=Append(blstm2-forward, blstm2-backward) cell-dim=$lstm_dim delay=-3 $lstm_opts
+  fast-lstm-layer name=blstm3-backward input=Append(blstm2-forward, blstm2-backward) cell-dim=$lstm_dim delay=3 $lstm_opts
 
   relu-batchnorm-layer name=dnn1 input=Append(blstm3-forward, blstm3-backward) dim=$tdnn_dim target-rms=$final_layer_normalize_target self-repair-scale=$self_repair_scale $dnn_opts
-  output-layer name=output input=dnn1 output-delay=$label_delay include-log-softmax=true dim=$num_targets max-change=1.5 $dnn_opts
+  output-layer name=output input=dnn1 output-delay=$label_delay include-log-softmax=true dim=$num_targets max-change=1.5 $dnn_opts param-stddev=$final_stddev
 
 EOF
   steps/nnet3/xconfig_to_configs.py --xconfig-file $dir/configs/network.xconfig --config-dir $dir/configs/
@@ -160,10 +167,10 @@ if [ $stage -le 13 ]; then
     --chain.lm-opts="--num-extra-lm-states=2000" \
     --egs.dir "$common_egs_dir" \
     --egs.stage $get_egs_stage \
-    --egs.opts "--normalize-egs false" \
+    --egs.opts "--normalize-egs $normalize_egs" \
     --egs.chunk-left-context $chunk_left_context \
     --egs.chunk-right-context $chunk_right_context \
-    --trainer.options="--compiler.cache-capacity=512 --den-use-initials=$den_use_initials --den-use-finals=$den_use_finals --check-derivs=$dbl_chk" \
+    --trainer.options="--compiler.cache-capacity=512 --offset-first-transitions=$normalize_egs --den-use-initials=$den_use_initials --den-use-finals=$den_use_finals --check-derivs=$dbl_chk" \
     --trainer.no-mmi-percent $no_mmi_percent \
     --trainer.equal-align-iters $equal_align_iters \
     --trainer.num-chunk-per-minibatch $minibatch_size \
@@ -204,25 +211,29 @@ if [ $stage -le 15 ]; then
     iter_opts=" --iter $decode_iter "
   fi
   for decode_set in train_dev eval2000; do
-      (
+    (
+      rm -r $dir/decode_${decode_set}${decode_iter:+_$decode_iter}_${decode_suff} || true
       steps/nnet3/decode.sh --acwt $acwt --post-decode-acwt $post_acwt \
-          --nj 50 --cmd "$decode_cmd" $iter_opts \
-          --extra-left-context $extra_left_context  \
-          --extra-right-context $extra_right_context  \
-          --frames-per-chunk "$frames_per_chunk" \
-         $graph_dir data/${decode_set}_hires \
-         $dir/decode${wtstr}_${decode_set}${decode_iter:+_$decode_iter}_${decode_suff} || exit 1;
-      rm -r  $dir/decode_${decode_set}${decode_iter:+_$decode_iter}_${decode_suff}
-      ln -sf $dir/decode${wtstr}_${decode_set}${decode_iter:+_$decode_iter}_${decode_suff} \
-        $dir/decode_${decode_set}${decode_iter:+_$decode_iter}_${decode_suff}
+                            --nj 50 --cmd "$decode_cmd" $iter_opts \
+                            --extra-left-context $extra_left_context  \
+                            --extra-right-context $extra_right_context  \
+                            --frames-per-chunk "$frames_per_chunk" \
+                            $graph_dir data/${decode_set}_hires \
+                            $dir/decode${wtstr}_${decode_set}${decode_iter:+_$decode_iter}_${decode_suff} || exit 1;
+
+      ln -sf \
+         decode${wtstr}_${decode_set}${decode_iter:+_$decode_iter}_${decode_suff} \
+         $dir/decode_${decode_set}${decode_iter:+_$decode_iter}_${decode_suff}
       ~/bin/swbd.sh $dir
+      echo "HAS FISHERRRRRRRRRRRRRRRRRRRRRRRRRRRR: $has_fisher"
       if $has_fisher; then
-          steps/lmrescore_const_arpa.sh --cmd "$decode_cmd" \
-            data/lang_sw1_{tg,fsh_fg} data/${decode_set}_hires \
-            $dir/decode${wtstr}_${decode_set}${decode_iter:+_$decode_iter}_sw1_{tg,fsh_fg} || exit 1;
-          rm -r $dir/decode_${decode_set}${decode_iter:+_$decode_iter}_sw1_fsh_fg
-          ln -sf $dir/decode${wtstr}_${decode_set}${decode_iter:+_$decode_iter}_sw1_fsh_fg \
-            $dir/decode_${decode_set}${decode_iter:+_$decode_iter}_sw1_fsh_fg
+        echo "LR RESCORRRRRING"
+        rm -r $dir/decode_${decode_set}${decode_iter:+_$decode_iter}_sw1_fsh_fg || true
+        steps/lmrescore_const_arpa.sh --cmd "$decode_cmd" \
+                                      data/lang_sw1_{tg,fsh_fg} data/${decode_set}_hires \
+                                      $dir/decode${wtstr}_${decode_set}${decode_iter:+_$decode_iter}_sw1_{tg,fsh_fg} || exit 1;
+        ln -sf decode${wtstr}_${decode_set}${decode_iter:+_$decode_iter}_sw1_fsh_fg \
+           $dir/decode_${decode_set}${decode_iter:+_$decode_iter}_sw1_fsh_fg
       fi
       ) &
   done

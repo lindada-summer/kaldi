@@ -21,7 +21,7 @@ final_layer_normalize_target=0.5
 num_jobs_initial=2
 num_jobs_final=5
 minibatch_size=150=128,64/300=100,64,32/600=50,32,16/1200=16,8
-remove_egs=false
+remove_egs=true
 common_egs_dir=
 no_mmi_percent=20
 l2_regularize=0.00005
