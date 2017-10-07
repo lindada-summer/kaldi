@@ -61,6 +61,7 @@ base_lang_affix=
 n_tie=0
 normalize_egs=false
 cmd=queue.pl
+use_final_stddev=false
 
 # End configuration section.
 echo "$0 $@"  # Print the command line for logging
@@ -137,6 +138,10 @@ if [ $stage -le 12 ]; then
 
   num_targets=$(tree-info $treedir/tree |grep num-pdfs|awk '{print $2}')
   #learning_rate_factor=$(echo "print 0.5/$xent_regularize" | python)
+  final_stddev=0
+  if $use_final_stddev; then
+    final_stddev=$(echo "print(1.0/$dim)" | python)
+  fi
 
   mkdir -p $dir/configs
   if [ -z $drop_prop ]; then
@@ -167,7 +172,7 @@ EOF
     $nnet_block name=tdnn7 input=Append(-3,0,3) dim=$dim max-change=$hid_max_change self-repair-scale=$self_repair $common
 
     $nnet_block name=prefinal-chain input=tdnn7 dim=$dim target-rms=$final_layer_normalize_target self-repair-scale=$self_repair $common
-    output-layer name=output include-log-softmax=true dim=$num_targets max-change=$final_max_change $common
+    output-layer name=output include-log-softmax=true dim=$num_targets max-change=$final_max_change $common param-stddev=$final_stddev
 EOF
   fi
 

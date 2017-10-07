@@ -51,7 +51,8 @@ with open(args.lex) as f:
 #        print("{} --> {}".format(w, lex[w]))
 #    i +=1
 
-
+n_tot = 0
+n_fail = 0
 for line in sys.stdin:
     line = line.strip().split()
     key = line[0]
@@ -60,9 +61,14 @@ for line in sys.stdin:
     if random.random() < args.be_silprob:
         ptrans += [sil]
     for i in range(len(wtrans)):
+        n_tot += 1
         w = wtrans[i]
         if w not in lex:
-            sys.stderr.write("{} not found in lexicon, replacing with {}".format(w, unk))
+            n_fail += 1
+            if n_fail < 20:
+                sys.stderr.write("{} not found in lexicon, replacing with {}\n".format(w, unk))
+            elif n_fail == 20:
+                sys.stderr.write("Not warning about OOVs any more.\n")
             tr = lex[unk]
         else:
             tr = copy.deepcopy(lex[w])
@@ -79,3 +85,5 @@ for line in sys.stdin:
         if random.random() < p:
             ptrans += [sil]
     print(key + " " + " ".join(ptrans))
+
+sys.stderr.write("{} out of {} were OOVs\n".format(n_fail, n_tot))
